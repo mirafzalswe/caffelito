@@ -120,6 +120,28 @@ install -m 0644 "$APP_DIR/deploy/systemd/coffee-worker.service"        /etc/syst
 systemctl daemon-reload
 systemctl enable coffee-api coffee-bot-customer coffee-bot-staff coffee-worker
 
+log "Installing Postgres backup script + daily cron"
+install -m 0755 "$APP_DIR/deploy/coffee-pg-backup.sh" /usr/local/sbin/coffee-pg-backup.sh
+mkdir -p /var/backups/coffee
+chmod 700 /var/backups/coffee
+chown postgres:postgres /var/backups/coffee
+cat > /etc/cron.d/coffee-pg-backup <<CRON
+# Coffee Loyalty — daily Postgres backup at 03:30 UTC, 14-day retention
+30 3 * * * postgres /usr/local/sbin/coffee-pg-backup.sh 2>&1 | logger -t coffee-pg-backup
+CRON
+chmod 644 /etc/cron.d/coffee-pg-backup
+
+log "Configuring UFW firewall (allow SSH only)"
+if command -v ufw >/dev/null 2>&1; then
+    ufw --force reset >/dev/null
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow 22/tcp comment "SSH"
+    # Uncomment when you add a domain + HTTPS:
+    # ufw allow 'Nginx Full'
+    ufw --force enable
+fi
+
 log "Done. Next steps:"
 cat <<EOF
 
