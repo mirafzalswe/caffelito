@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     security_pepper: SecretStr = SecretStr("change-me-pepper")
     jwt_secret: SecretStr = SecretStr("change-me-jwt")
     jwt_ttl_seconds: int = 3600
+    # Set false to allow the admin session cookie over plain HTTP
+    # (e.g. local SSH-tunnel debugging on a prod box without TLS).
+    # Defaults to True in prod and False elsewhere via the model validator below.
+    admin_cookie_secure: bool | None = None
 
     # ---- Defaults ----
     default_timezone: str = "UTC"
@@ -75,6 +79,12 @@ class Settings(BaseSettings):
         if len(v) != 3:
             raise ValueError("currency must be a 3-letter ISO code")
         return v.upper()
+
+    @model_validator(mode="after")
+    def _default_admin_cookie_secure(self) -> "Settings":
+        if self.admin_cookie_secure is None:
+            self.admin_cookie_secure = self.app_env == "prod"
+        return self
 
     @model_validator(mode="after")
     def _enforce_real_secrets_in_prod(self) -> "Settings":
