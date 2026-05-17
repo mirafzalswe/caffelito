@@ -9,6 +9,7 @@ User=coffee
 Group=coffee
 WorkingDirectory=/opt/coffee-loyalty
 EnvironmentFile=/opt/coffee-loyalty/.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/coffee-loyalty/.venv/bin/python -m app.bots.customer
 Restart=always
 RestartSec=5
@@ -18,7 +19,7 @@ TimeoutStopSec=20
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=tmpfs
 ReadWritePaths=/opt/coffee-loyalty
 
 [Install]
