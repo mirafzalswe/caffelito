@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("prod.title") }} · Admin{% endblock %}
+{% block crumbs %}{{ t("prod.title") }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("package", 18) }}</div>
+  <h1>{{ t("prod.title") }}</h1>
+</div>
+
+<div class="panel">
+{% if not rows %}
+  <div class="empty">
+    <div class="empty-mark">{{ icon("package", 22) }}</div>
+    <p>{{ t("prod.empty") }}</p>
+  </div>
+{% else %}
+<table>
+  <thead><tr>
+    <th>{{ t("prod.col.name") }}</th><th>{{ t("prod.col.sku") }}</th><th>{{ t("prod.col.category") }}</th><th>{{ t("prod.col.size") }}</th><th>{{ t("prod.col.price") }}</th>
+    <th>{{ t("prod.col.loyalty") }}</th><th>{{ t("prod.col.status") }}</th>{% if can_manage %}<th></th>{% endif %}
+  </tr></thead>
+  <tbody>
+  {% for p in rows %}
+  <tr>
+    <td><b>{{ p.name }}</b></td>
+    <td><code>{{ p.sku or "—" }}</code></td>
+    <td>{{ p.category or "—" }}</td>
+    <td>{{ p.size or "—" }}</td>
+    <td><b>{{ p.base_price | money }}</b></td>
+    <td>{% if p.is_loyalty_eligible %}<span class="tag green">{{ t("common.yes") }}</span>
+        {% else %}<span class="tag gray">{{ t("common.no") }}</span>{% endif %}</td>
+    <td>{% if p.is_active %}<span class="tag green">{{ t("status.active.fem") | lower }}</span>
+        {% else %}<span class="tag gray">{{ t("status.inactive") | lower }}</span>{% endif %}</td>
+    {% if can_manage %}
+    <td>
+      <form method="post" action="/admin/products/{{ p.id }}/toggle" style="display:inline">
+        <button class="btn ghost" type="submit">{% if p.is_active %}{{ t("common.off") }}{% else %}{{ t("common.on") }}{% endif %}</button>
+      </form>
+    </td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+
+{% if can_manage %}
+<div class="panel">
+<h2><span class="action-mark accent">{{ icon("plus", 14) }}</span> {{ t("prod.new") }}</h2>
+<form method="post" action="/admin/products/new">
+  <div class="form-row"><label>{{ t("prod.col.name") }} *</label><input name="name" required placeholder="Cappuccino"></div>
+  <div class="form-row"><label>{{ t("prod.col.sku") }}</label><input name="sku" placeholder="CAPP-M"></div>
+  <div class="form-row"><label>{{ t("prod.col.category") }}</label>
+    <select name="category">
+      <option value="coffee">coffee</option>
+      <option value="tea">tea</option>
+      <option value="food">food</option>
+      <option value="merch">merch</option>
+    </select>
+  </div>
+  <div class="form-row"><label>{{ t("prod.col.size") }}</label>
+    <select name="size">
+      <option value="">—</option>
+      <option value="S">S</option>
+      <option value="M">M</option>
+      <option value="L">L</option>
+      <option value="XL">XL</option>
+    </select>
+  </div>
+  <div class="form-row"><label>{{ t("prod.col.price") }} *</label><input name="base_price" required placeholder="2.20"></div>
+  <div class="form-row">
+    <label style="display:flex;align-items:center;gap:.4rem;font-weight:400;">
+      <input type="checkbox" name="is_loyalty_eligible" checked>
+      {{ t("prod.loyalty_hint") }}
+    </label>
+  </div>
+  <button class="btn primary" type="submit">{{ t("common.create") }}</button>
+</form>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% set hide_chrome = True %}
+{% block title %}{{ t("login.title") }} · Caffelito{% endblock %}
+{% block raw_content %}
+<div class="login-shell">
+  <div class="login-card">
+    <div class="login-mark" style="background:transparent;padding:0;">
+      <img src="/admin/static/logo.svg" alt="Caffelito" style="width:52px;height:52px;display:block;">
+    </div>
+    <h1>Caffelito</h1>
+    <div class="brand">{{ t("login.title") }}</div>
+    <div style="display:flex;gap:.25rem;justify-content:center;margin:.5rem 0;">
+      <a href="/admin/lang/ru" style="padding:.2rem .6rem;border-radius:6px;font-size:.75rem;font-weight:600;text-decoration:none;{% if lang == 'ru' %}background:var(--accent);color:white;{% else %}color:var(--text-muted);border:1px solid var(--border);{% endif %}">RU</a>
+      <a href="/admin/lang/uz" style="padding:.2rem .6rem;border-radius:6px;font-size:.75rem;font-weight:600;text-decoration:none;{% if lang == 'uz' %}background:var(--accent);color:white;{% else %}color:var(--text-muted);border:1px solid var(--border);{% endif %}">UZ</a>
+    </div>
+    {% if error %}<div class="flash">{{ error }}</div>{% endif %}
+    <form method="post" action="/admin/login">
+      <div class="form-row">
+        <label for="email">{{ t("login.email") }}</label>
+        <input type="text" id="email" name="email" required autofocus autocomplete="username" value="{{ email or '' }}">
+      </div>
+      <div class="form-row">
+        <label for="password">{{ t("login.password") }}</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button type="submit">{{ icon("lock", 14) }} {{ t("login.submit") }}</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

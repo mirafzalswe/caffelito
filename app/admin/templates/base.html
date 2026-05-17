@@ -1,0 +1,71 @@
+{% from "_icons.html" import icon %}
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Admin · Caffelito{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/admin/static/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/static/admin.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+</head>
+<body>
+{% if not hide_chrome %}
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark" style="background:transparent;padding:0;">
+        <img src="/admin/static/logo.svg" alt="Caffelito" style="width:28px;height:28px;display:block;">
+      </span>
+      <span class="brand-text">
+        Caffelito
+        <small>{{ tenant_name or "—" }}</small>
+      </span>
+    </div>
+    <nav class="nav">
+      <a href="/admin/" class="{% if section == 'dashboard' %}active{% endif %}">{{ icon("dashboard") }} {{ t("nav.dashboard") }}</a>
+      <a href="/admin/customers/" class="{% if section == 'customers' %}active{% endif %}">{{ icon("users") }} {{ t("nav.customers") }}</a>
+      <a href="/admin/campaigns/" class="{% if section == 'campaigns' %}active{% endif %}">{{ icon("target") }} {{ t("nav.campaigns") }}</a>
+      <a href="/admin/broadcasts/" class="{% if section == 'broadcasts' %}active{% endif %}">{{ icon("send") }} {{ t("nav.broadcasts") }}</a>
+      <a href="/admin/products/" class="{% if section == 'products' %}active{% endif %}">{{ icon("package") }} {{ t("nav.products") }}</a>
+      <div class="group-title">{{ t("nav.group.shop") }}</div>
+      <a href="/admin/branches/" class="{% if section == 'branches' %}active{% endif %}">{{ icon("store") }} {{ t("nav.branches") }}</a>
+      <a href="/admin/staff/" class="{% if section == 'staff' %}active{% endif %}">{{ icon("user-cog") }} {{ t("nav.staff") }}</a>
+      <div class="group-title">{{ t("nav.group.history") }}</div>
+      <a href="/admin/transactions/" class="{% if section == 'transactions' %}active{% endif %}">{{ icon("credit-card") }} {{ t("nav.transactions") }}</a>
+      <a href="/admin/audit/" class="{% if section == 'audit' %}active{% endif %}">{{ icon("shield") }} {{ t("nav.audit") }}</a>
+    </nav>
+    <div class="lang-switch" style="padding:.5rem 1rem;display:flex;gap:.25rem;">
+      <a href="/admin/lang/ru" class="lang-chip {% if lang == 'ru' %}active{% endif %}" style="flex:1;text-align:center;padding:.3rem;border-radius:6px;font-size:.75rem;font-weight:600;text-decoration:none;{% if lang == 'ru' %}background:var(--accent);color:white;{% else %}color:var(--text-muted);border:1px solid var(--border);{% endif %}">RU</a>
+      <a href="/admin/lang/uz" class="lang-chip {% if lang == 'uz' %}active{% endif %}" style="flex:1;text-align:center;padding:.3rem;border-radius:6px;font-size:.75rem;font-weight:600;text-decoration:none;{% if lang == 'uz' %}background:var(--accent);color:white;{% else %}color:var(--text-muted);border:1px solid var(--border);{% endif %}">UZ</a>
+    </div>
+    <div class="footer">
+      <span class="version">v{{ app_version }}</span>
+      <a href="/admin/logout" class="logout">{{ icon("log-out", 14) }} {{ t("nav.logout") }}</a>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="crumbs">{% block crumbs %}{% endblock %}</div>
+      <div class="who">
+        {% if admin %}
+          <div class="avatar">{{ (admin.full_name or "·")[:1] | upper }}</div>
+          <div class="who-meta">
+            <span class="who-name">{{ admin.full_name }}</span>
+            <span class="who-role">{{ admin.role }}</span>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% if flash %}<div class="flash {{ flash_kind or '' }}">{{ flash }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% else %}
+{% block raw_content %}{% endblock %}
+{% endif %}
+</body>
+</html>

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("bc.detail.title") }} · Admin{% endblock %}
+{% block crumbs %}<a href="/admin/broadcasts/">{{ t("bc.title") }}</a> / {{ b.id | short }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("send", 18) }}</div>
+  <h1>{{ t("bc.detail.title") }}</h1>
+</div>
+
+<div class="panel">
+  <div class="kv">
+    <div class="k">{{ t("bc.col.status") }}</div>
+    <div>
+      {% if b.status == 'done' %}<span class="tag green">done</span>
+      {% elif b.status == 'sending' %}<span class="tag amber">sending…</span>
+      {% elif b.status == 'failed' %}<span class="tag red">failed</span>
+      {% else %}<span class="tag gray">{{ b.status }}</span>{% endif %}
+    </div>
+    <div class="k">{{ t("bc.col.when") }}</div><div class="muted">{{ b.created_at | dt }}</div>
+    {% if b.sent_at %}<div class="k">{{ t("bc.detail.sent_at") }}</div><div class="muted">{{ b.sent_at | dt }}</div>{% endif %}
+    <div class="k">{{ t("bc.col.progress") }}</div>
+    <div><b>{{ b.sent_count }}</b><span class="muted"> / {{ b.total_recipients }}</span>
+      {% if b.failed_count %}<span class="muted"> · ❌ {{ b.failed_count }}</span>{% endif %}</div>
+    {% if b.error %}<div class="k">{{ t("bc.detail.error") }}</div><div style="color:var(--danger-text)">{{ b.error }}</div>{% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0;">{{ t("bc.detail.body") }}</h2>
+  <div style="white-space:pre-wrap;">{{ b.body }}</div>
+</div>
+
+{% if b.status == 'sending' %}
+<script>
+  // Cheap auto-refresh while it's still sending.
+  setTimeout(function () { window.location.reload(); }, 4000);
+</script>
+{% endif %}
+
+{% endblock %}

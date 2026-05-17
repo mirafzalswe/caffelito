@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("cust.title.list") }} · Admin{% endblock %}
+{% block crumbs %}{{ t("cust.title.list") }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("users", 18) }}</div>
+  <h1>{{ t("cust.title.list") }}</h1>
+  {% if can_manage %}<a class="btn primary page-action" href="/admin/customers/new">{{ icon("plus", 14) }} {{ t("cust.new") }}</a>{% endif %}
+</div>
+
+<form method="get" class="search">
+  <span class="search-ico">{{ icon("search", 16) }}</span>
+  <input type="text" name="q" value="{{ q }}" placeholder="{{ t('cust.search_ph') }}" autofocus>
+  <button class="btn primary" type="submit">{{ t("common.find") }}</button>
+  {% if q %}<a class="btn ghost" href="/admin/customers/">{{ t("common.reset") }}</a>{% endif %}
+</form>
+
+<div class="panel">
+{% if not rows %}
+  <div class="empty">
+    <div class="empty-mark">{{ icon("users", 22) }}</div>
+    <p>{{ t("cust.no_match") }}</p>
+  </div>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>{{ t("cust.col.name") }}</th><th>{{ t("cust.col.phone") }}</th><th>{{ t("cust.col.status") }}</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in rows %}
+    <tr>
+      <td><b>{{ u.full_name or "—" }}</b>{% if u.telegram_id %} <span title="Telegram" style="color:var(--accent);vertical-align:middle;margin-left:.25rem;">{{ icon("send", 12) }}</span>{% endif %}</td>
+      <td>{{ u.phone_e164 }}</td>
+      <td>
+        {% if u.status == 'active' %}<span class="tag green">{{ t("status.active") | lower }}</span>
+        {% elif u.status == 'blocked' %}<span class="tag red">{{ t("status.blocked") | lower }}</span>
+        {% else %}<span class="tag gray">{{ u.status }}</span>{% endif %}
+      </td>
+      <td><a class="btn" href="/admin/customers/{{ u.id }}">{{ t("common.open") }} {{ icon("chevron-right", 12) }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+
+<div class="pager">
+  {% if page > 1 %}<a class="btn" href="?q={{ q }}&page={{ page-1 }}">{{ icon("chevron-left", 12) }} {{ t("common.prev") }}</a>{% endif %}
+  <span>{{ t("common.page") }} {{ page }}</span>
+  {% if has_next %}<a class="btn" href="?q={{ q }}&page={{ page+1 }}">{{ t("common.next") }} {{ icon("chevron-right", 12) }}</a>{% endif %}
+</div>
+
+{% endblock %}

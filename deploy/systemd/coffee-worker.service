@@ -1,0 +1,25 @@
+[Unit]
+Description=Coffee Loyalty — arq background worker
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=coffee
+Group=coffee
+WorkingDirectory=/opt/coffee-loyalty
+EnvironmentFile=/opt/coffee-loyalty/.env
+ExecStart=/opt/coffee-loyalty/.venv/bin/arq app.workers.arq_worker.WorkerSettings
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/coffee-loyalty
+
+[Install]
+WantedBy=multi-user.target

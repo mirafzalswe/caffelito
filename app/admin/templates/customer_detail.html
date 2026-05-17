@@ -1,0 +1,686 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ user.full_name or t("cust.no_name") }} · Admin{% endblock %}
+{% block crumbs %}<a href="/admin/customers/">{{ t("nav.customers") }}</a> / {{ user.phone_e164 | phonemask }}{% endblock %}
+{% block content %}
+
+<style>
+  /* ── Hero ─────────────────────────────────────────────────────────── */
+  .cust-hero {
+    display:flex; align-items:center; gap:1.25rem; padding:1.25rem 1.5rem;
+    background: linear-gradient(135deg, var(--accent-soft) 0%, var(--bg) 100%);
+    border:1px solid var(--border); border-radius: var(--radius-lg);
+    margin-bottom:1.25rem;
+  }
+  .cust-avatar {
+    width:64px; height:64px; border-radius:50%;
+    display:grid; place-items:center;
+    background: var(--accent-grad); color:white;
+    font-weight:700; font-size:1.5rem;
+    flex-shrink:0; box-shadow: var(--shadow-md);
+  }
+  .cust-hero h1 { margin:0; font-size:1.4rem; line-height:1.2; display:flex; align-items:center; gap:.6rem; }
+  .cust-hero .meta { display:flex; gap:1rem; align-items:center; margin-top:.4rem; color:var(--text-muted); font-size:.9rem; flex-wrap:wrap; }
+  .cust-hero .meta > span { display:inline-flex; align-items:center; gap:.35rem; }
+  .cust-hero .grow { flex:1; min-width:0; }
+  .cust-hero .actions { display:flex; gap:.5rem; }
+
+  /* status dot before "активен"/"заблокирован" */
+  .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .status-dot.green { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+  .status-dot.red   { background: var(--danger);  box-shadow: 0 0 0 3px var(--danger-soft); }
+  .pill { display:inline-flex; align-items:center; gap:.4rem; padding:.2rem .6rem; border-radius:999px; font-size:.78rem; font-weight:600; }
+  .pill.green { background: var(--success-soft); color: var(--success-text); }
+  .pill.red   { background: var(--danger-soft); color: var(--danger-text); }
+
+  /* ── KPI cards ────────────────────────────────────────────────────── */
+  .kpi-grid {
+    display:grid; gap:.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin-bottom:1.25rem;
+  }
+  .kpi {
+    background: var(--surface); border:1px solid var(--border);
+    border-radius: var(--radius-lg); padding:1rem 1.1rem;
+    position:relative; overflow:hidden;
+  }
+  .kpi .kpi-label { font-size:.78rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; font-weight:600; }
+  .kpi .kpi-val { font-size:1.85rem; font-weight:700; margin-top:.25rem; line-height:1.1; }
+  .kpi .kpi-sub { font-size:.85rem; color:var(--text-muted); margin-top:.15rem; display:inline-flex; align-items:center; gap:.3rem; }
+  .kpi .kpi-ico {
+    position:absolute; top:.85rem; right:.95rem;
+    width:36px; height:36px; border-radius:10px;
+    display:grid; place-items:center;
+  }
+  .kpi.accent .kpi-ico { background: var(--accent-soft); color: var(--accent-text); }
+  .kpi.green  .kpi-ico { background: var(--success-soft); color: var(--success-text); }
+  .kpi.amber  .kpi-ico { background: var(--warning-soft); color: var(--warning-text); }
+  .kpi.gray   .kpi-ico { background: var(--gray-soft); color: var(--gray-text); }
+
+  .kpi-progress { height:6px; border-radius:999px; background: var(--gray-soft); margin-top:.7rem; overflow:hidden; }
+  .kpi-progress > i { display:block; height:100%; background: var(--accent-grad); border-radius:999px; transition:width .3s; }
+
+  /* Special highlight for free-coffee KPI when available */
+  .kpi.has-free { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+  .kpi .kpi-btn {
+    margin-top:.75rem; width:100%;
+    background: var(--success); color:white;
+    border:1px solid var(--success);
+    padding:.6rem .8rem; border-radius: var(--radius);
+    font-weight:600; font-size:.9rem;
+    cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:.45rem;
+    transition: filter .15s;
+  }
+  .kpi .kpi-btn:hover { filter: brightness(1.05); }
+
+  /* ── Action panel ────────────────────────────────────────────────── */
+  .action-card { padding: 1.25rem 1.5rem; }
+  .action-card h2 { margin:0 0 1rem; font-size:1.05rem; }
+
+  .branch-bar { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:1.1rem; align-items:center; padding-bottom:1rem; border-bottom:1px dashed var(--border); }
+  .branch-bar .lbl { font-size:.85rem; color:var(--text-muted); margin-right:.25rem; font-weight:500; }
+  .branch-bar .chip { cursor:pointer; padding:.4rem .85rem; border:1px solid var(--border); border-radius:999px; background:var(--surface); font-size:.85rem; transition:all .15s; }
+  .branch-bar .chip:hover { border-color: var(--border-strong); }
+  .branch-bar .chip input { display:none; }
+  .branch-bar .chip:has(input:checked) { background: var(--text); color:white; border-color: var(--text); }
+
+  .action-tabs { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:.5rem; margin-bottom:1.25rem; }
+  .action-tab {
+    cursor:pointer; padding:.95rem .5rem; border:1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg-soft); user-select:none; text-align:center; transition: all .15s;
+    display:flex; flex-direction:column; align-items:center; gap:.45rem; color: var(--text);
+  }
+  .action-tab:hover { border-color: var(--border-strong); background: var(--bg-hover); }
+  .action-tab input { display:none; }
+  .action-tab .tab-ico { display:grid; place-items:center; width:36px; height:36px; border-radius:8px; background:var(--surface); color:var(--accent-text); border:1px solid var(--border); }
+  .action-tab .tab-lbl { font-size:.88rem; font-weight:500; }
+  .action-tab:has(input:checked) {
+    background: var(--accent); color:white; border-color: var(--accent);
+    box-shadow: var(--shadow-md);
+  }
+  .action-tab:has(input:checked) .tab-ico { background: rgba(255,255,255,.18); color:white; border-color: transparent; }
+
+  .op-form { display:none; }
+  .op-form.active { display:block; animation: opFade .2s ease; }
+  @keyframes opFade { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform: none; } }
+  .op-form .submit-row { display:flex; justify-content:flex-end; padding-top:.5rem; }
+  .op-form .submit-row button { min-width: 200px; padding:.7rem 1.5rem; font-size:.95rem; display:inline-flex; align-items:center; justify-content:center; gap:.45rem; }
+
+  /* ── Campaign picker (chip-cards) ───────────────────────────────── */
+  .camp-picker {
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap:.6rem;
+  }
+  .camp-chip {
+    position:relative;
+    display:flex; align-items:center; gap:.75rem;
+    padding:.85rem 1rem;
+    border:1px solid var(--border); border-radius: var(--radius-lg);
+    background: var(--surface); cursor:pointer;
+    transition: transform .12s ease, border-color .15s, box-shadow .15s, background .15s;
+    user-select:none;
+  }
+  .camp-chip:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-soft);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+  .camp-chip .ico {
+    width:36px; height:36px; border-radius:10px;
+    display:grid; place-items:center; flex-shrink:0;
+    background: var(--gray-soft); color: var(--gray-text);
+    transition: background .15s, color .15s;
+  }
+  .camp-chip .ico .icon { width:18px; height:18px; }
+  .camp-chip.is-auto      .ico { background: var(--accent-soft); color: var(--accent-text); }
+  .camp-chip.is-punchcard .ico { background: var(--accent-soft); color: var(--accent-text); }
+  .camp-chip.is-cashback  .ico { background: var(--success-soft); color: var(--success-text); }
+  .camp-chip.is-vip       .ico { background: var(--success-soft); color: var(--success-text); }
+
+  .camp-chip .main { display:flex; flex-direction:column; min-width:0; gap:1px; }
+  .camp-chip .lbl {
+    font-weight:600; font-size:.92rem; line-height:1.25;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    color: var(--text);
+  }
+  .camp-chip .sub {
+    font-size:.75rem; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing:.03em; font-weight:500;
+  }
+
+  /* Selected state — accent border + soft shadow + check-mark badge */
+  .camp-chip.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md);
+    transform: translateY(-1px);
+  }
+  .camp-chip.is-cashback.selected,
+  .camp-chip.is-vip.selected {
+    border-color: var(--success);
+    box-shadow: 0 0 0 3px var(--success-soft), var(--shadow-md);
+  }
+  .camp-chip.selected::after {
+    content: "";
+    position:absolute; top:8px; right:8px;
+    width:18px; height:18px; border-radius:50%;
+    background: var(--accent);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
+    background-repeat: no-repeat; background-position: center;
+  }
+  .camp-chip.is-cashback.selected::after,
+  .camp-chip.is-vip.selected::after { background-color: var(--success); }
+
+  /* sub-radio "что подарить" inside Bonus */
+  .pc-pick { display:flex; gap:.6rem; flex-wrap:wrap; }
+  .pc-pick label {
+    cursor:pointer; padding:.5rem .9rem; border:1px solid var(--border); border-radius:8px;
+    background:var(--surface); display:inline-flex; align-items:center; gap:.45rem; transition: all .15s;
+  }
+  .pc-pick label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+  .pc-pick input { display:none; }
+
+  /* ── Stamp card with progress ────────────────────────────────────── */
+  .stamp-card {
+    background: var(--surface); border:1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 1rem 1.15rem;
+  }
+  .stamp-card .row1 { display:flex; justify-content:space-between; align-items:center; margin-bottom:.4rem; gap:.5rem; }
+  .stamp-card .title { font-weight:600; font-size:.95rem; display:inline-flex; align-items:center; gap:.4rem; }
+  .stamp-card .progress-num { font-size:.85rem; color: var(--text-muted); }
+  .stamp-card .bar { height:8px; border-radius:999px; background: var(--gray-soft); overflow:hidden; }
+  .stamp-card .bar > i { display:block; height:100%; background: var(--accent-grad); border-radius:999px; transition: width .3s; }
+  .stamp-card.complete { border-color: var(--success); }
+  .stamp-card.complete .bar > i { background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%); }
+  .stamp-card .badge { font-size:.72rem; padding:.2rem .55rem; border-radius:999px; font-weight:600; display:inline-flex; align-items:center; gap:.25rem; }
+  .stamp-card .badge.go { background: var(--success-soft); color: var(--success-text); }
+  .stamp-card .badge.wip { background: var(--gray-soft); color: var(--gray-text); }
+
+  .redeem-inline {
+    margin-top:.75rem; width:100%;
+    background: var(--success); color:white; border:1px solid var(--success);
+    padding:.55rem; border-radius: var(--radius); font-weight:600; cursor:pointer; font-size:.9rem;
+    display:inline-flex; align-items:center; justify-content:center; gap:.45rem;
+  }
+  .redeem-inline:hover { filter: brightness(1.05); }
+
+  /* ── History ─────────────────────────────────────────────────────── */
+  .history-list { display:flex; flex-direction:column; gap:.4rem; }
+  .history-row {
+    display:flex; align-items:center; gap:.85rem;
+    padding:.65rem .85rem; border:1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .history-row:hover { background: var(--bg-soft); }
+  .history-row .tx-ico {
+    width:36px; height:36px; border-radius:8px; display:grid; place-items:center; flex-shrink:0;
+  }
+  .history-row .tx-ico.purchase { background: var(--accent-soft); color: var(--accent-text); }
+  .history-row .tx-ico.free     { background: var(--success-soft); color: var(--success-text); }
+  .history-row .tx-ico.prepaid  { background: var(--warning-soft); color: var(--warning-text); }
+  .history-row .tx-ico.grant    { background: var(--success-soft); color: var(--success-text); }
+  .history-row .tx-ico.refund   { background: var(--danger-soft); color: var(--danger-text); }
+  .history-row .tx-ico.other    { background: var(--gray-soft); color: var(--gray-text); }
+  .history-row .tx-main { flex:1; min-width:0; }
+  .history-row .tx-title { font-weight:500; }
+  .history-row .tx-sub { font-size:.8rem; color: var(--text-muted); }
+  .history-row .tx-amt { font-weight:600; font-size:.95rem; }
+
+  /* ── Redeem dialog ───────────────────────────────────────────────── */
+  dialog#redeem-dialog {
+    border:1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 1.5rem; max-width: 480px; width: 90%;
+    box-shadow: var(--shadow-pop);
+  }
+  dialog#redeem-dialog::backdrop { background: rgba(16, 24, 40, .45); backdrop-filter: blur(2px); }
+  dialog#redeem-dialog h3 { margin: 0 0 .25rem; font-size:1.15rem; display:inline-flex; align-items:center; gap:.5rem; }
+  dialog#redeem-dialog .hint { color: var(--text-muted); font-size:.9rem; margin-bottom:1rem; }
+  dialog#redeem-dialog .card-pick { display:flex; flex-direction:column; gap:.5rem; margin-bottom:1.25rem; }
+  dialog#redeem-dialog .card-pick label {
+    display:flex; align-items:center; gap:.6rem; padding:.7rem .85rem;
+    border:1px solid var(--border); border-radius:8px; cursor:pointer; background:var(--surface);
+  }
+  dialog#redeem-dialog .card-pick label:has(input:checked) {
+    border-color: var(--success); background: var(--success-soft);
+  }
+  dialog#redeem-dialog .actions-row { display:flex; gap:.5rem; justify-content:flex-end; }
+</style>
+
+{% set complete_cards = active_cards | selectattr('0.status', 'equalto', 'complete') | list %}
+
+<!-- ===== HERO ============================================== -->
+<section class="cust-hero">
+  <div class="cust-avatar">{{ (user.full_name or user.phone_e164 or '·')[:1] | upper }}</div>
+  <div class="grow">
+    <h1>
+      {{ user.full_name or t("cust.no_name") }}
+      {% if user.status == 'active' %}<span class="pill green"><span class="status-dot green"></span> {{ t("status.active") | lower }}</span>
+      {% elif user.status == 'blocked' %}<span class="pill red"><span class="status-dot red"></span> {{ t("status.blocked") | lower }}</span>{% endif %}
+    </h1>
+    <div class="meta">
+      <span>{{ icon("phone", 14) }} {{ user.phone_e164 }}</span>
+      {% if user.telegram_id %}<span>{{ icon("send", 14) }} Telegram{% if user.telegram_username %} @{{ user.telegram_username }}{% endif %}</span>{% endif %}
+      <span>{{ t("cust.created_at") }} {{ user.created_at | dt }}</span>
+    </div>
+  </div>
+  {% if can_manage %}
+    <div class="actions">
+    {% if user.status == 'active' %}
+    <form method="post" action="/admin/customers/{{ user.id }}/block" onsubmit="return confirm('{{ t('cust.block_confirm') }}')">
+      <button class="btn ghost" type="submit">{{ icon("ban", 14) }} {{ t("cust.block") }}</button>
+    </form>
+    {% else %}
+    <form method="post" action="/admin/customers/{{ user.id }}/unblock">
+      <button class="btn primary" type="submit">{{ t("cust.unblock") }}</button>
+    </form>
+    {% endif %}
+    </div>
+  {% endif %}
+</section>
+
+<!-- ===== KPI ============================================== -->
+{% set pct = (view.stamps_total / view.stamps_required * 100) if view.stamps_required else 0 %}
+<section class="kpi-grid">
+  <div class="kpi accent">
+    <div class="kpi-ico">{{ icon("target", 18) }}</div>
+    <div class="kpi-label">{{ t("kpi.punchcard") }}</div>
+    <div class="kpi-val">{{ view.stamps_total }}<span class="muted" style="font-size:1rem;font-weight:500"> / {{ view.stamps_required }}</span></div>
+    <div class="kpi-progress"><i style="width: {{ pct|round(0) }}%"></i></div>
+  </div>
+
+  <div class="kpi green {% if view.free_coffees_available %}has-free{% endif %}">
+    <div class="kpi-ico">{{ icon("gift", 18) }}</div>
+    <div class="kpi-label">{{ t("kpi.free") }}</div>
+    <div class="kpi-val">{{ view.free_coffees_available }}<span class="muted" style="font-size:.95rem;font-weight:500"> {% if view.free_coffees_available == 1 %}{{ t("kpi.ready") }}{% else %}{{ t("kpi.ready.many") }}{% endif %}</span></div>
+    <div class="kpi-sub">{{ t("kpi.total_received") }} <b style="color:var(--text)">{{ total_redeemed }}</b></div>
+    {% if view.free_coffees_available and can_manage and user.status == 'active' and branches %}
+      <button type="button" class="kpi-btn" onclick="document.getElementById('redeem-dialog').showModal()">
+        {{ icon("gift", 14) }} {{ t("act.btn.redeem") }}
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="kpi green">
+    <div class="kpi-ico">{{ icon("wallet", 18) }}</div>
+    <div class="kpi-label">{{ t("kpi.cashback") }}</div>
+    <div class="kpi-val">{{ view.cashback_balance | money }}</div>
+    <div class="kpi-sub">{{ currency }}</div>
+  </div>
+
+  {% if view.prepaid_remaining and view.prepaid_remaining > 0 %}
+  <div class="kpi amber">
+    <div class="kpi-ico">{{ icon("box", 18) }}</div>
+    <div class="kpi-label">{{ t("kpi.prepaid") }}</div>
+    <div class="kpi-val">{{ view.prepaid_remaining }}</div>
+    <div class="kpi-sub">{{ t("act.tab.prepaid") }}</div>
+  </div>
+  {% endif %}
+
+  <div class="kpi accent">
+    <div class="kpi-ico">{{ icon("credit-card", 18) }}</div>
+    <div class="kpi-label">{{ t("kpi.spent") }}</div>
+    <div class="kpi-val">{{ (lifetime_spend or 0) | money }}<span class="muted" style="font-size:.95rem;font-weight:500"> {{ currency }}</span></div>
+    <div class="kpi-sub">
+      {% if view.last_visit_at %}{{ icon("live", 12) }} {{ view.last_visit_at | dt }}{% else %}{{ t("kpi.no_visits") }}{% endif %}
+    </div>
+  </div>
+
+  {% if active_membership %}
+  {% set vip_pct = ((active_membership.balance_remaining / active_membership.amount_paid * 100) if active_membership.amount_paid and active_membership.amount_paid > 0 else 0) | round(0) %}
+  <div class="kpi green" style="border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft);">
+    <div class="kpi-ico">{{ icon("shield", 18) }}</div>
+    <div class="kpi-label">{{ t("kpi.vip") }} −{{ active_membership.discount_percent }}%</div>
+    <div class="kpi-val">{{ active_membership.balance_remaining | money }}<span class="muted" style="font-size:.95rem;font-weight:500"> / {{ active_membership.amount_paid | money }}</span></div>
+    <div class="kpi-sub">{{ active_membership_name or "—" }}{% if active_membership.expires_at %} · {{ t("kpi.vip_until", dt=active_membership.expires_at | dt) }}{% endif %}</div>
+    <div class="kpi-progress" style="margin-top:.5rem;"><i style="width: {{ vip_pct }}%; background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);"></i></div>
+  </div>
+  {% elif vip_exhausted %}
+  <div class="kpi amber" style="border-color: var(--warning); box-shadow: 0 0 0 3px var(--warning-soft);">
+    <div class="kpi-ico">{{ icon("shield", 18) }}</div>
+    <div class="kpi-label">{{ t("kpi.vip") }}</div>
+    <div class="kpi-val" style="font-size:1.1rem;">{% if last_membership.status == 'expired' %}срок истёк{% else %}баланс 0{% endif %}</div>
+    <div class="kpi-sub">прошлый депозит: {{ last_membership.amount_paid | money }} {{ currency }}</div>
+    {% if can_manage and user.status == 'active' and tier_campaigns %}
+    <button type="button" class="kpi-btn"
+            style="background:var(--warning);border-color:var(--warning);"
+            onclick="document.querySelector('.action-tab input[value=\'vip\']').click(); window.scrollTo({top: document.querySelector('.action-card').offsetTop - 20, behavior: 'smooth'});">
+      {{ icon("plus", 14) }} Пополнить VIP
+    </button>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+
+<!-- ===== ACTION ============================================== -->
+{% if can_manage and user.status == 'active' %}
+<section class="panel action-card">
+  <h2>{{ t("act.title") }}</h2>
+
+  {% if not branches %}
+    <p class="muted">{{ t("act.no_branch") }}</p>
+  {% else %}
+
+  <div class="branch-bar">
+    <span class="lbl">{{ icon("store", 13) }} {{ t("act.branch") }}</span>
+    {% for b in branches %}
+    <label class="chip">
+      <input type="radio" name="_branch" value="{{ b.id }}" {% if loop.first %}checked{% endif %}>
+      <span>{{ b.name }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="action-tabs">
+    <label class="action-tab"><input type="radio" name="_op" value="purchase" checked><span class="tab-ico">{{ icon("shopping-cart", 18) }}</span><span class="tab-lbl">{{ t("act.tab.purchase") }}</span></label>
+    <label class="action-tab"><input type="radio" name="_op" value="vip"><span class="tab-ico">{{ icon("shield", 18) }}</span><span class="tab-lbl">{{ t("act.tab.vip") }}</span></label>
+  </div>
+
+  {% set active_punchcards = punchcard_campaigns | selectattr('status', 'equalto', 'active') | list %}
+
+  <!-- 1. Покупка -->
+  <form class="op-form active" data-op="purchase" method="post" action="/admin/customers/{{ user.id }}/purchase">
+    <input type="hidden" name="client_request_id" value="{{ crids.purchase }}">
+    <input type="hidden" name="branch_id" value="{{ branches[0].id if branches }}">
+    {% if not products %}
+      <p class="muted">{{ t("act.no_products") }} <a href="/admin/products/">{{ t("act.add") }}</a></p>
+    {% else %}
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>{{ t("act.product") }}</label>
+        <select name="product_id" required>
+          {% for p in products %}
+          <option value="{{ p.id }}">{{ p.name }}{% if p.size %} {{ p.size }}{% endif %} — {{ p.base_price | money }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-row">
+        <label>{{ t("act.qty") }}</label>
+        <input type="number" name="qty" value="1" min="1" max="50" required>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>{{ t("act.campaign_auto") }}</label>
+      <input type="hidden" name="campaign_id" id="bc-camp-id" value="">
+      <div class="camp-picker" data-target="bc-camp-id">
+        {% if active_membership %}
+        <label class="camp-chip is-vip selected" data-cid="">
+          <span class="ico">{{ icon("shield", 18) }}</span>
+          <span class="main">
+            <span class="lbl">VIP −{{ active_membership.discount_percent }}%</span>
+            <span class="sub">остаток {{ active_membership.balance_remaining | money }} {{ currency }}</span>
+          </span>
+        </label>
+        {% else %}
+        <label class="camp-chip is-auto selected" data-cid="">
+          <span class="ico">{{ icon("cpu", 18) }}</span>
+          <span class="main">
+            <span class="lbl">Авто</span>
+            <span class="sub">по приоритету</span>
+          </span>
+        </label>
+        {% endif %}
+        {% for c in punchcard_campaigns %}{% if c.status == 'active' %}
+        <label class="camp-chip {% if c.type == 'cashback' %}is-cashback{% else %}is-punchcard{% endif %}" data-cid="{{ c.id }}">
+          <span class="ico">
+            {% if c.type == 'punchcard' %}{{ icon("target", 18) }}
+            {% else %}{{ icon("wallet", 18) }}{% endif %}
+          </span>
+          <span class="main">
+            <span class="lbl">{{ c.name }}</span>
+            <span class="sub">
+              {% if c.type == 'punchcard' %}штамп-карта
+              {% else %}кэшбэк{% if (c.rules or {}).get('percent') %} {{ (c.rules or {}).get('percent') }}%{% endif %}{% endif %}
+              {% if not c.stackable %} · экскл.{% endif %}
+            </span>
+          </span>
+        </label>
+        {% endif %}{% endfor %}
+      </div>
+      {% set inactive_camps = punchcard_campaigns | rejectattr('status', 'equalto', 'active') | list %}
+      {% if inactive_camps %}
+      <small class="muted" style="display:block;margin-top:.5rem;">
+        Неактивные акции: {% for c in inactive_camps %}{{ c.name }} ({{ c.status }}){% if not loop.last %}, {% endif %}{% endfor %}.
+        <a href="/admin/campaigns/">Активировать</a>
+      </small>
+      {% endif %}
+    </div>
+    <div class="submit-row"><button class="btn primary" type="submit">{{ icon("shopping-cart", 14) }} {{ t("act.btn.purchase") }}</button></div>
+    {% endif %}
+  </form>
+
+  <!-- 2. VIP-абонемент -->
+  <form class="op-form" data-op="vip" method="post" action="/admin/customers/{{ user.id }}/membership">
+    <input type="hidden" name="client_request_id" value="{{ crids.membership }}">
+    <input type="hidden" name="branch_id" value="{{ branches[0].id if branches }}">
+    {% if active_membership %}
+      <p class="muted" style="display:flex;align-items:center;gap:.5rem;">{{ icon("shield", 14) }} {{ t("act.vip.has_active") }}</p>
+    {% elif not tier_campaigns %}
+      <p class="muted">{{ t("act.vip.no_camps") }} <a href="/admin/campaigns/new">{{ t("act.create_first") }}</a></p>
+    {% else %}
+    {% set is_topup = vip_exhausted %}
+    {% set prev_amount = (last_membership.amount_paid | int) if is_topup else 500000 %}
+    {% if is_topup %}
+    <p class="muted" style="display:flex;align-items:center;gap:.5rem;margin:0 0 .85rem;">
+      {{ icon("alert-triangle", 14) }}
+      Прошлый VIP клиента {% if last_membership.status == 'expired' %}истёк{% else %}исчерпан{% endif %}
+      ({{ last_membership.amount_paid | money }} {{ currency }}, −{{ last_membership.discount_percent }}%).
+      Пополни сейчас.
+    </p>
+    {% endif %}
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>{{ t("act.campaign") }}</label>
+        <select name="campaign_id" required id="vip-camp-select">
+          {% for c in tier_campaigns %}
+          <option value="{{ c.id }}"
+                  data-min="{{ (c.rules or {}).get('entry_amount', 0) }}"
+                  data-pct="{{ (c.rules or {}).get('discount_percent', 10) }}"
+                  data-days="{{ (c.rules or {}).get('duration_days', 90) }}"
+                  {% if is_topup and c.id == last_membership.campaign_id %}selected{% endif %}>
+            {{ c.name }} · −{{ (c.rules or {}).get('discount_percent', 10) }}%{% if (c.rules or {}).get('duration_days') %} · {{ (c.rules or {}).get('duration_days') }} дн.{% endif %} · от {{ (c.rules or {}).get('entry_amount', 0) | int }} {{ currency }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-row">
+        <label>{{ t("act.vip.amount") }} ({{ currency }})</label>
+        <input type="text" name="amount" id="vip-amount" required
+               placeholder="{{ prev_amount }}"
+               value="{% if is_topup %}{{ prev_amount }}{% endif %}">
+        <small class="muted" id="vip-min-hint">
+          Минимум: <b id="vip-min-display">—</b> {{ currency }}
+          <span class="muted"> · по правилу акции</span>
+        </small>
+      </div>
+    </div>
+    <div class="submit-row"><button class="btn primary" type="submit">{{ icon("shield", 14) }}
+      {% if is_topup %}Пополнить VIP{% else %}{{ t("act.btn.activate_vip") }}{% endif %}
+    </button></div>
+    {% endif %}
+  </form>
+
+  {% endif %}
+</section>
+{% elif can_manage and user.status == 'blocked' %}
+<section class="panel" style="border-color: var(--danger-soft); background: var(--danger-soft);">
+  <p style="margin:0;color:var(--danger-text);font-weight:500;display:flex;align-items:center;gap:.5rem;">
+    {{ icon("ban", 16) }} {{ t("cust.blocked_warn") }}
+  </p>
+</section>
+{% endif %}
+
+<!-- ===== ACTIVE CARDS / PACKAGES ============================================== -->
+{% if active_cards or active_packages %}
+<section style="margin-top:1.25rem;">
+  <h2 style="margin:0 0 .75rem;font-size:1.05rem;">{{ t("cards.title") }}</h2>
+  <div class="kpi-grid">
+    {% for card, camp_name in active_cards %}
+    {% set p = (card.stamps / card.stamps_required * 100) if card.stamps_required else 0 %}
+    <div class="stamp-card {% if card.status == 'complete' %}complete{% endif %}">
+      <div class="row1">
+        <span class="title">{{ icon("coffee", 14) }} {{ camp_name or "—" }}</span>
+        {% if card.status == 'complete' %}<span class="badge go">{{ icon("gift", 11) }} {{ t("cards.status.go") }}</span>
+        {% else %}<span class="badge wip">{{ t("cards.status.wip") }}</span>{% endif %}
+      </div>
+      <div class="row1">
+        <span class="progress-num">{{ card.stamps }} / {{ card.stamps_required }}</span>
+        <span class="progress-num">{{ p | round(0) }}%</span>
+      </div>
+      <div class="bar"><i style="width: {{ p | round(0) }}%"></i></div>
+      {% if card.status == 'complete' and can_manage and user.status == 'active' and branches %}
+      <form method="post" action="/admin/customers/{{ user.id }}/redeem"
+            onsubmit="return confirm('{{ t('cards.redeem_confirm', name=camp_name or '') }}')">
+        <input type="hidden" name="client_request_id" value="{{ crids.redeem }}">
+        <input type="hidden" name="branch_id" value="{{ branches[0].id }}">
+        <input type="hidden" name="card_id" value="{{ card.id }}">
+        <button type="submit" class="redeem-inline">{{ icon("gift", 14) }} {{ t("act.btn.redeem") }}</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% for pkg, camp_name in active_packages %}
+    {% set p = (pkg.qty_remaining / pkg.qty_total * 100) if pkg.qty_total else 0 %}
+    <div class="stamp-card">
+      <div class="row1">
+        <span class="title">{{ icon("box", 14) }} {{ camp_name or t("act.tab.prepaid") }}</span>
+        <span class="badge wip">{{ pkg.qty_remaining }}/{{ pkg.qty_total }}</span>
+      </div>
+      <div class="row1">
+        <span class="progress-num">{{ t("cards.pack_left", n=pkg.qty_remaining) }}</span>
+        <span class="progress-num">{% if pkg.expires_at %}{{ t("cards.pack_until", dt=pkg.expires_at | dt) }}{% else %}{{ t("cards.pack_no_exp") }}{% endif %}</span>
+      </div>
+      <div class="bar"><i style="width: {{ p | round(0) }}%; background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);"></i></div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<!-- ===== HISTORY ============================================== -->
+<section style="margin-top:1.25rem;">
+  <h2 style="margin:0 0 .75rem;font-size:1.05rem;">{{ t("hist.title") }}</h2>
+  {% if not txs %}
+    <p class="muted" style="margin:0;">{{ t("hist.empty") }}</p>
+  {% else %}
+  <div class="history-list">
+    {% for tx in txs %}
+    <div class="history-row">
+      {% if tx.type == 'purchase' %}
+        <div class="tx-ico purchase">{{ icon("shopping-cart", 16) }}</div>
+        <div class="tx-main"><div class="tx-title">{{ t("hist.purchase") }}</div><div class="tx-sub">{{ tx.created_at | dt }}</div></div>
+      {% elif tx.type == 'redeem_free' %}
+        <div class="tx-ico free">{{ icon("gift", 16) }}</div>
+        <div class="tx-main"><div class="tx-title">{{ t("hist.free") }}</div><div class="tx-sub">{{ tx.created_at | dt }}</div></div>
+      {% elif tx.type == 'prepaid_consume' %}
+        <div class="tx-ico prepaid">{{ icon("box", 16) }}</div>
+        <div class="tx-main"><div class="tx-title">{{ t("hist.prepaid") }}</div><div class="tx-sub">{{ tx.created_at | dt }}</div></div>
+      {% elif tx.type == 'manual_grant' %}
+        <div class="tx-ico grant">{{ icon("sparkles", 16) }}</div>
+        <div class="tx-main"><div class="tx-title">{{ t("hist.grant") }}</div><div class="tx-sub">{{ tx.created_at | dt }}</div></div>
+      {% elif tx.type == 'refund' %}
+        <div class="tx-ico refund">{{ icon("undo", 16) }}</div>
+        <div class="tx-main"><div class="tx-title">{{ t("hist.refund") }}</div><div class="tx-sub">{{ tx.created_at | dt }}</div></div>
+      {% else %}
+        <div class="tx-ico other">·</div>
+        <div class="tx-main"><div class="tx-title">{{ tx.type }}</div><div class="tx-sub">{{ tx.created_at | dt }}</div></div>
+      {% endif %}
+      <div class="tx-amt">
+        {% if tx.total_amount %}{{ tx.total_amount | money }} <span class="muted" style="font-weight:400">{{ tx.currency }}</span>{% else %}—{% endif %}
+      </div>
+      <a class="btn ghost" href="/admin/transactions/{{ tx.id }}" title="{{ t('common.open') }}">{{ icon("chevron-right", 14) }}</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+{% if view.free_coffees_available and can_manage and user.status == 'active' and branches %}
+<dialog id="redeem-dialog">
+  <form method="post" action="/admin/customers/{{ user.id }}/redeem">
+    <input type="hidden" name="client_request_id" value="{{ crids.redeem }}">
+    <h3>{{ icon("gift", 18) }} {{ t("dlg.redeem.title") }}</h3>
+    {% if complete_cards | length <= 1 %}
+      <p class="hint">{{ t("dlg.redeem.hint1") }}</p>
+      {% if complete_cards | length == 1 %}
+      <input type="hidden" name="card_id" value="{{ complete_cards[0][0].id }}">
+      {% endif %}
+    {% else %}
+      <p class="hint">{{ t("dlg.redeem.hintN", n=complete_cards | length) }}</p>
+      <div class="card-pick">
+        {% for card, camp_name in complete_cards %}
+        <label>
+          <input type="radio" name="card_id" value="{{ card.id }}" required {% if loop.first %}checked{% endif %}>
+          <span style="flex:1;"><b>{{ camp_name or "—" }}</b><br><small class="muted">{{ t("dlg.redeem.completed") }} {{ card.completed_at | dt if card.completed_at else "—" }}</small></span>
+        </label>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <input type="hidden" name="branch_id" value="{{ branches[0].id if branches }}">
+    <div class="actions-row">
+      <button type="button" class="btn ghost" onclick="document.getElementById('redeem-dialog').close()">{{ t("common.cancel") }}</button>
+      <button type="submit" class="btn primary" style="background:var(--success);border-color:var(--success);display:inline-flex;align-items:center;gap:.4rem;">{{ icon("gift", 14) }} {{ t("dlg.redeem.submit") }}</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+
+<script>
+(function () {
+  document.querySelectorAll('input[name="_op"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      var op = this.value;
+      document.querySelectorAll('.op-form').forEach(function (f) {
+        f.classList.toggle('active', f.dataset.op === op);
+      });
+    });
+  });
+  function syncBranch() {
+    var picked = document.querySelector('input[name="_branch"]:checked');
+    if (!picked) return;
+    document.querySelectorAll('.op-form input[name="branch_id"]').forEach(function (i) {
+      i.value = picked.value;
+    });
+  }
+  document.querySelectorAll('input[name="_branch"]').forEach(function (r) {
+    r.addEventListener('change', syncBranch);
+  });
+  syncBranch();
+
+  // VIP form: show the chosen campaign's minimum entry amount under the input.
+  var vipSel = document.getElementById('vip-camp-select');
+  var vipMin = document.getElementById('vip-min-display');
+  if (vipSel && vipMin) {
+    function refreshVipMin() {
+      var opt = vipSel.selectedOptions[0];
+      vipMin.textContent = opt ? (opt.dataset.min || '0') : '0';
+    }
+    vipSel.addEventListener('change', refreshVipMin);
+    refreshVipMin();
+  }
+
+  // Campaign chip-picker — click a chip, hidden input gets its data-cid value.
+  document.querySelectorAll('.camp-picker').forEach(function (picker) {
+    var hidden = document.getElementById(picker.dataset.target);
+    picker.querySelectorAll('.camp-chip').forEach(function (chip) {
+      chip.addEventListener('click', function (e) {
+        e.preventDefault();
+        picker.querySelectorAll('.camp-chip.selected').forEach(function (s) {
+          s.classList.remove('selected');
+        });
+        chip.classList.add('selected');
+        if (hidden) hidden.value = chip.dataset.cid || '';
+      });
+    });
+  });
+
+  document.querySelectorAll('.op-form, dialog form').forEach(function (f) {
+    f.addEventListener('submit', function () {
+      var btn = f.querySelector('button[type="submit"]');
+      if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    });
+  });
+})();
+</script>
+
+{% endblock %}

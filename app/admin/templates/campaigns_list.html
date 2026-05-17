@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("camp.title.list") }} · Admin{% endblock %}
+{% block crumbs %}{{ t("nav.campaigns") }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("target", 18) }}</div>
+  <h1>{{ t("nav.campaigns") }}</h1>
+  {% if can_manage %}<a class="btn primary page-action" href="/admin/campaigns/new">{{ icon("plus", 14) }} {{ t("common.create") }}</a>{% endif %}
+</div>
+
+<div class="panel">
+{% if not rows %}
+  <div class="empty">
+    <div class="empty-mark">{{ icon("target", 22) }}</div>
+    <p>{{ t("camp.empty") }}</p>
+  </div>
+{% else %}
+<table>
+  <thead><tr>
+    <th>{{ t("camp.col.name") }}</th><th>{{ t("camp.col.type") }}</th><th>{{ t("camp.col.status") }}</th><th>{{ t("camp.col.priority") }}</th><th>{{ t("camp.col.stack") }}</th><th></th>
+  </tr></thead>
+  <tbody>
+    {% for c in rows %}
+    <tr>
+      <td><b>{{ c.name }}</b></td>
+      <td>
+        <span style="display:inline-flex;align-items:center;gap:.4rem;">
+        {% if c.type == 'punchcard' %}{{ icon("coffee", 14) }} {{ t("camp.type.punchcard") }}
+        {% elif c.type == 'cashback' %}{{ icon("wallet", 14) }} {{ t("camp.type.cashback") }}
+        {% elif c.type == 'prepaid' %}{{ icon("box", 14) }} {{ t("camp.type.prepaid") }}
+        {% else %}{{ c.type }}{% endif %}
+        </span>
+      </td>
+      <td>
+        {% if c.status == 'active' %}<span class="tag green">{{ t("status.active.fem") | lower }}</span>
+        {% elif c.status == 'paused' %}<span class="tag amber">{{ t("status.paused") | lower }}</span>
+        {% elif c.status == 'archived' %}<span class="tag gray">{{ t("status.archived") | lower }}</span>
+        {% else %}<span class="tag">{{ c.status }}</span>{% endif %}
+      </td>
+      <td>{{ c.priority }}</td>
+      <td>
+        {% if c.stackable %}<span style="color:var(--success-text);display:inline-flex;align-items:center;gap:.25rem;">{{ icon("check", 14) }} {{ t("common.yes") }}</span>
+        {% else %}<span style="display:inline-flex;align-items:center;gap:.25rem;color:var(--text-muted);">{{ icon("lock", 13) }} {{ t("camp.exclusive") }}</span>{% endif %}
+      </td>
+      <td><a class="btn" href="/admin/campaigns/{{ c.id }}">{{ t("common.open") }} {{ icon("chevron-right", 12) }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+{% endblock %}

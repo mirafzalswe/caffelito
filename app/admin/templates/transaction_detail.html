@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}TX {{ tx.id | short }} · Admin{% endblock %}
+{% block crumbs %}<a href="/admin/transactions">{{ t("tx.title") }}</a> / {{ tx.id | short }}{% endblock %}
+{% block content %}
+
+<h1>{{ t("tx.detail.title") }} {{ tx.id | short }}</h1>
+
+<div class="detail-grid">
+  <div class="panel">
+    <h2>{{ t("tx.detail.params") }}</h2>
+    <div class="kv">
+      <div class="k">ID</div><div>{{ tx.id }}</div>
+      <div class="k">{{ t("tx.col.type") }}</div><div><span class="tag">{{ tx.type }}</span> · {{ tx.status }}</div>
+      <div class="k">{{ t("tx.col.when") }}</div><div>{{ tx.created_at | dt }}</div>
+      <div class="k">{{ t("tx.col.amount") }}</div><div>{% if tx.total_amount %}{{ tx.total_amount | money }} {{ tx.currency }}{% else %}—{% endif %}</div>
+      <div class="k">{{ t("tx.col.customer") }}</div>
+      <div>{% if customer %}<a href="/admin/customers/{{ customer.id }}">{{ customer.full_name or customer.phone_e164 }}</a>{% else %}—{% endif %}</div>
+      <div class="k">{{ t("tx.col.branch") }}</div><div>{{ tx.branch_id }}</div>
+      <div class="k">{{ t("tx.col.staff") }}</div><div>{{ tx.staff_id }}</div>
+      <div class="k">{{ t("tx.detail.source") }}</div><div>{{ tx.source }}</div>
+      <div class="k">Idempotency</div><div><code>{{ tx.client_request_id }}</code></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>{{ t("tx.detail.items") }}</h2>
+    {% if not items %}<p class="muted">—</p>
+    {% else %}
+    <table>
+      <thead><tr><th>{{ t("act.qty") }}</th><th>{{ t("prod.col.price") }}</th><th>—</th><th>—</th></tr></thead>
+      <tbody>
+      {% for it in items %}
+      <tr>
+        <td>{{ it.qty }}</td>
+        <td>{{ it.unit_price | money }}</td>
+        <td>{{ it.discount | money }}</td>
+        <td><span class="tag gray">{{ it.paid_with }}</span></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <h2>{{ t("tx.detail.ledger") }}</h2>
+  {% if not ledger %}<p class="muted">—</p>
+  {% else %}
+  <table>
+    <thead><tr><th>{{ t("tx.col.when") }}</th><th>Account</th><th>Δ</th><th>Unit</th><th>{{ t("act.reason") }}</th></tr></thead>
+    <tbody>
+    {% for le in ledger %}
+    <tr>
+      <td>{{ le.created_at | dt }}</td>
+      <td><code>{{ le.account }}</code></td>
+      <td>{{ le.delta }}</td>
+      <td>{{ le.unit }}</td>
+      <td class="muted">{{ le.reason }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+{% endblock %}

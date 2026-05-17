@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ campaign.name if campaign else t("camp.title.new") }} · Admin{% endblock %}
+{% block crumbs %}<a href="/admin/campaigns/">{{ t("nav.campaigns") }}</a> / {% if campaign %}{{ campaign.name }}{% else %}{{ t("camp.title.new") | lower }}{% endif %}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("target", 18) }}</div>
+  <h1>{% if campaign %}{{ campaign.name }}{% else %}{{ t("camp.title.new") }}{% endif %}</h1>
+</div>
+
+<form id="campaign-form" method="post" action="{% if campaign %}/admin/campaigns/{{ campaign.id }}{% else %}/admin/campaigns/new{% endif %}">
+
+  <div class="panel">
+    <div class="form-row">
+      <label>{{ t("camp.name") }} *</label>
+      <input type="text" name="name" id="campaign-name" required value="{{ campaign.name if campaign else '' }}" placeholder="10 + 1">
+    </div>
+
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>{{ t("camp.col.status") }}</label>
+        <select name="status">
+          <option value="active"   {% if campaign and campaign.status=='active' %}selected{% elif not campaign %}selected{% endif %}>{{ t("status.active.fem") }}</option>
+          <option value="paused"   {% if campaign and campaign.status=='paused' %}selected{% endif %}>{{ t("status.paused") }}</option>
+          <option value="draft"    {% if campaign and campaign.status=='draft' %}selected{% endif %}>{{ t("status.draft") }}</option>
+          <option value="archived" {% if campaign and campaign.status=='archived' %}selected{% endif %}>{{ t("status.archived") }}</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.priority") }}</label>
+        <input type="number" name="priority" min="0" max="1000" value="{{ campaign.priority if campaign else 100 }}">
+        <small class="muted">{{ t("camp.priority_hint") }}</small>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:.5rem;font-weight:400;">
+        <input type="checkbox" name="stackable" value="1" {% if campaign and campaign.stackable %}checked{% endif %}>
+        <span>{{ t("camp.stackable") }}</span>
+      </label>
+      <small class="muted">{{ t("camp.stackable_hint") }}</small>
+    </div>
+
+    <div class="form-row">
+      <label>{{ t("camp.branches") }}</label>
+      <div class="branches-list">
+        {% for b in branches %}
+        <label class="branch-chip">
+          <input type="checkbox" name="branches" value="{{ b.id }}" {% if b.id in selected_branches %}checked{% elif not campaign %}checked{% endif %}>
+          <span>{{ b.name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% if not branches %}<small class="muted">{{ t("camp.no_branch_link") }} <a href="/admin/branches/">{{ t("common.create") | lower }}</a></small>{% endif %}
+    </div>
+  </div>
+
+  <div class="panel">
+    {% if campaign %}
+    <p class="muted" style="margin:0 0 1rem;">{{ t("camp.type.label") }}: <span class="tag">{{ campaign.type }}</span> · {{ t("camp.type.fixed") }}</p>
+    <input type="hidden" name="type" value="{{ campaign.type }}" id="campaign-type">
+    {% else %}
+    <div class="type-cards">
+      <label class="type-card">
+        <input type="radio" name="type" value="punchcard" required checked>
+        <div class="card-icon accent">{{ icon("target", 18) }}</div>
+        <div class="card-title">{{ t("camp.tile.pc.title") }}</div>
+        <div class="card-desc">{{ t("camp.tile.pc.desc") }}</div>
+      </label>
+      <label class="type-card">
+        <input type="radio" name="type" value="cashback" required>
+        <div class="card-icon green">{{ icon("wallet", 18) }}</div>
+        <div class="card-title">{{ t("camp.tile.cb.title") }}</div>
+        <div class="card-desc">{{ t("camp.tile.cb.desc") }}</div>
+      </label>
+      <label class="type-card">
+        <input type="radio" name="type" value="prepaid" required>
+        <div class="card-icon amber">{{ icon("box", 18) }}</div>
+        <div class="card-title">{{ t("camp.tile.pp.title") }}</div>
+        <div class="card-desc">{{ t("camp.tile.pp.desc") }}</div>
+      </label>
+      <label class="type-card">
+        <input type="radio" name="type" value="tiered_status" required>
+        <div class="card-icon green">{{ icon("shield", 18) }}</div>
+        <div class="card-title">{{ t("camp.tile.tier.title") }}</div>
+        <div class="card-desc">{{ t("camp.tile.tier.desc") }}</div>
+      </label>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="panel type-fields" id="fields-punchcard">
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>{{ t("camp.pc.stamps") }} *</label>
+        <input type="number" id="pc-stamps" min="2" max="50" value="10">
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.pc.category") }}</label>
+        <select id="pc-category">
+          <option value="coffee" selected>{{ t("camp.pc.cat.coffee") }}</option>
+          <option value="tea">{{ t("camp.pc.cat.tea") }}</option>
+          <option value="food">{{ t("camp.pc.cat.food") }}</option>
+          <option value="">{{ t("camp.pc.cat.any") }}</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.pc.expires") }}</label>
+        <input type="number" id="pc-expires" min="1" max="3650" value="90">
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.pc.cooldown") }}</label>
+        <input type="number" id="pc-cooldown" min="0" max="1440" value="0">
+        <small class="muted">{{ t("camp.pc.cooldown_hint") }}</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel type-fields" id="fields-cashback" style="display:none;">
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>{{ t("camp.cb.percent") }} *</label>
+        <input type="number" id="cb-percent" min="0.5" max="50" step="0.5" value="5">
+        <small class="muted">{{ t("camp.cb.percent_hint") }}</small>
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.cb.min") }}</label>
+        <input type="number" id="cb-min" min="0" step="1000" value="0">
+        <small class="muted">{{ t("camp.cb.min_hint") }}</small>
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.cb.expires") }}</label>
+        <input type="number" id="cb-expires" min="1" max="3650" value="180">
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.pc.category") }}</label>
+        <select id="cb-category">
+          <option value="" selected>{{ t("camp.cat.any") }}</option>
+          <option value="coffee">{{ t("camp.cat.coffee") }}</option>
+          <option value="tea">{{ t("camp.cat.tea") }}</option>
+          <option value="food">{{ t("camp.cat.food") }}</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel type-fields" id="fields-prepaid" style="display:none;">
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>{{ t("camp.pp.qty") }} *</label>
+        <input type="number" id="pp-qty" min="2" max="200" value="10">
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.pp.price") }} *</label>
+        <input type="number" id="pp-price" min="0" step="1000" value="270000">
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.pc.category") }}</label>
+        <select id="pp-category">
+          <option value="coffee" selected>{{ t("camp.pc.cat.coffee") }}</option>
+          <option value="tea">{{ t("camp.pc.cat.tea") }}</option>
+          <option value="food">{{ t("camp.pc.cat.food") }}</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.pp.expires") }}</label>
+        <input type="number" id="pp-expires" min="1" max="3650" value="180">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel type-fields" id="fields-tiered_status" style="display:none;">
+    <div class="form-grid-2">
+      <div class="form-row">
+        <label>{{ t("camp.tier.entry") }} *</label>
+        <input type="number" id="tr-entry" min="0" step="1000" value="300000">
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.tier.discount") }} *</label>
+        <input type="number" id="tr-discount" min="1" max="100" value="10">
+      </div>
+      <div class="form-row">
+        <label>{{ t("camp.tier.duration") }} *</label>
+        <input type="number" id="tr-duration" min="1" max="3650" value="90">
+      </div>
+    </div>
+  </div>
+
+  <!-- Скрытые поля: code и rules генерируются JS перед отправкой -->
+  {% if not campaign %}<input type="hidden" name="code" id="campaign-code">{% endif %}
+  <input type="hidden" name="rules" id="rules-hidden">
+
+  <div class="form-actions">
+    <button class="btn primary" type="submit">{% if campaign %}{{ t("common.save") }}{% else %}{{ t("common.create") }}{% endif %}</button>
+    <a class="btn ghost" href="/admin/campaigns/">{{ t("common.cancel") }}</a>
+  </div>
+</form>
+
+<script>
+(function () {
+  const form = document.getElementById('campaign-form');
+  const hidden = document.getElementById('rules-hidden');
+  const typeRadios = document.querySelectorAll('input[name="type"]');
+  const typeFixed = document.getElementById('campaign-type');
+  const nameInput = document.getElementById('campaign-name');
+  const codeInput = document.getElementById('campaign-code');
+  const existingRules = {{ rules_json | tojson }};
+
+  function currentType() {
+    if (typeFixed) return typeFixed.value;
+    const r = document.querySelector('input[name="type"]:checked');
+    return r ? r.value : 'punchcard';
+  }
+  function refreshFieldsVisibility() {
+    const t = currentType();
+    document.querySelectorAll('.type-fields').forEach(el => el.style.display = 'none');
+    const block = document.getElementById('fields-' + t);
+    if (block) block.style.display = '';
+    document.querySelectorAll('.type-card').forEach(card => {
+      const r = card.querySelector('input[type="radio"]');
+      card.classList.toggle('active', !!(r && r.checked));
+    });
+  }
+  typeRadios.forEach(r => r.addEventListener('change', refreshFieldsVisibility));
+
+  function num(id, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    const v = el.value.trim();
+    if (v === '') return fallback;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+  function val(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+
+  function buildPunchcard() {
+    const trigger = { loyalty_eligible_only: true };
+    const cat = val('pc-category');
+    if (cat) trigger.product_category = cat;
+    return {
+      type: 'punchcard',
+      trigger,
+      stamps_required: num('pc-stamps', 10),
+      reward: { kind: 'free_product', category: cat || 'coffee' },
+      expires_after_days: num('pc-expires', 90),
+      cooldown_minutes: num('pc-cooldown', 0),
+    };
+  }
+  function buildCashback() {
+    const obj = {
+      type: 'cashback',
+      percent: num('cb-percent', 5),
+      min_amount: num('cb-min', 0),
+      expires_after_days: num('cb-expires', 180),
+    };
+    const cat = val('cb-category');
+    if (cat) obj.category = cat;
+    return obj;
+  }
+  function buildPrepaid() {
+    return {
+      type: 'prepaid',
+      package: { qty: num('pp-qty', 10), price: num('pp-price', 270000), category: val('pp-category') || 'coffee' },
+      expires_after_days: num('pp-expires', 180),
+    };
+  }
+  function buildTier() {
+    return {
+      type: 'tiered_status',
+      entry_amount: num('tr-entry', 300000),
+      discount_percent: num('tr-discount', 10),
+      duration_days: num('tr-duration', 90),
+    };
+  }
+  function buildRules() {
+    const t = currentType();
+    if (t === 'punchcard') return buildPunchcard();
+    if (t === 'cashback') return buildCashback();
+    if (t === 'prepaid') return buildPrepaid();
+    if (t === 'tiered_status') return buildTier();
+    return { type: t };
+  }
+
+  function setIfPresent(id, v) {
+    if (v === undefined || v === null) return;
+    const el = document.getElementById(id);
+    if (el) el.value = String(v);
+  }
+  function populateFromRules(rules) {
+    if (!rules || typeof rules !== 'object') return;
+    const t = rules.type;
+    if (t === 'punchcard') {
+      setIfPresent('pc-stamps', rules.stamps_required);
+      setIfPresent('pc-category', (rules.trigger || {}).product_category ?? 'coffee');
+      setIfPresent('pc-expires', rules.expires_after_days);
+      setIfPresent('pc-cooldown', rules.cooldown_minutes);
+    } else if (t === 'cashback') {
+      setIfPresent('cb-percent', rules.percent);
+      setIfPresent('cb-min', rules.min_amount);
+      setIfPresent('cb-expires', rules.expires_after_days);
+      setIfPresent('cb-category', rules.category ?? '');
+    } else if (t === 'prepaid') {
+      const pkg = rules.package || {};
+      setIfPresent('pp-qty', pkg.qty);
+      setIfPresent('pp-price', pkg.price);
+      setIfPresent('pp-category', pkg.category ?? 'coffee');
+      setIfPresent('pp-expires', rules.expires_after_days);
+    } else if (t === 'tiered_status') {
+      setIfPresent('tr-entry', rules.entry_amount);
+      setIfPresent('tr-discount', rules.discount_percent);
+      setIfPresent('tr-duration', rules.duration_days);
+    }
+  }
+
+  // Cyrillic-aware slug for technical code.
+  const TR = {а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'j',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'c',ч:'ch',ш:'sh',щ:'sch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
+  function slugify(s) {
+    let out = '';
+    for (const ch of (s || '').toLowerCase()) {
+      if (TR[ch] !== undefined) out += TR[ch];
+      else if (/[a-z0-9]/.test(ch)) out += ch;
+      else if (/[+]/.test(ch)) out += '_plus_';
+      else out += '_';
+    }
+    return out.toUpperCase().replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64) || 'CAMPAIGN';
+  }
+
+  form.addEventListener('submit', function (e) {
+    hidden.value = JSON.stringify(buildRules());
+    if (codeInput && nameInput) codeInput.value = slugify(nameInput.value);
+    const btn = form.querySelector('button[type="submit"]');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  });
+
+  // Initial bootstrap: parse existing rules in edit mode.
+  try {
+    if (existingRules && typeof existingRules === 'string' && existingRules.trim()) {
+      populateFromRules(JSON.parse(existingRules));
+    }
+  } catch (_) { /* ignore */ }
+  refreshFieldsVisibility();
+})();
+</script>
+
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("bc.title") }} · Admin{% endblock %}
+{% block crumbs %}{{ t("bc.title") }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("send", 18) }}</div>
+  <h1>{{ t("bc.title") }}</h1>
+  {% if can_manage %}<a class="btn primary page-action" href="/admin/broadcasts/new">{{ icon("plus", 14) }} {{ t("bc.new") }}</a>{% endif %}
+</div>
+
+<div class="panel" style="display:flex;gap:1rem;align-items:center;">
+  <span style="display:inline-flex;align-items:center;gap:.4rem;color:var(--text-muted);">{{ icon("users", 14) }} {{ t("bc.recipients") }}:</span>
+  <b style="font-size:1.05rem;">{{ recipients }}</b>
+  <span class="muted" style="font-size:.85rem;">{{ t("bc.recipients_hint") }}</span>
+</div>
+
+<div class="panel">
+{% if not rows %}
+  <div class="empty">
+    <div class="empty-mark">{{ icon("send", 22) }}</div>
+    <p>{{ t("bc.empty") }}</p>
+  </div>
+{% else %}
+<table>
+  <thead><tr>
+    <th>{{ t("bc.col.when") }}</th><th>{{ t("bc.col.preview") }}</th><th>{{ t("bc.col.media") }}</th><th>{{ t("bc.col.status") }}</th><th>{{ t("bc.col.progress") }}</th><th></th>
+  </tr></thead>
+  <tbody>
+    {% for b in rows %}
+    <tr>
+      <td class="muted">{{ b.created_at | dt }}</td>
+      <td>{{ (b.body or "")[:80] }}{% if b.body and b.body|length > 80 %}…{% endif %}</td>
+      <td>
+        {% if b.media_type == 'photo' %}{{ icon("box", 12) }} photo
+        {% elif b.media_type == 'video' %}{{ icon("box", 12) }} video
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        {% if b.status == 'done' %}<span class="tag green">done</span>
+        {% elif b.status == 'sending' %}<span class="tag amber">sending</span>
+        {% elif b.status == 'failed' %}<span class="tag red">failed</span>
+        {% else %}<span class="tag gray">{{ b.status }}</span>{% endif %}
+      </td>
+      <td><b>{{ b.sent_count }}</b><span class="muted"> / {{ b.total_recipients }}</span>{% if b.failed_count %}<span class="muted"> · ❌ {{ b.failed_count }}</span>{% endif %}</td>
+      <td><a class="btn" href="/admin/broadcasts/{{ b.id }}">{{ t("common.open") }} {{ icon("chevron-right", 12) }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("audit.title") }} · Admin{% endblock %}
+{% block crumbs %}{{ t("nav.audit") }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("shield", 18) }}</div>
+  <h1>{{ t("audit.title") }}</h1>
+</div>
+
+<div class="panel">
+{% if not rows %}
+  <div class="empty">
+    <div class="empty-mark">{{ icon("shield", 22) }}</div>
+    <p>{{ t("audit.empty") }}</p>
+  </div>
+{% else %}
+<table>
+  <thead><tr><th>{{ t("audit.col.when") }}</th><th>{{ t("audit.col.actor") }}</th><th>{{ t("audit.col.action") }}</th><th>{{ t("audit.col.target") }}</th><th>{{ t("audit.col.reason") }}</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.created_at | dt }}</td>
+    <td>{{ r.actor_type }}{% if r.actor_id %} · {{ r.actor_id | short }}{% endif %}</td>
+    <td><code>{{ r.action }}</code></td>
+    <td>{% if r.target_type %}{{ r.target_type }} {{ r.target_id | short }}{% else %}—{% endif %}</td>
+    <td class="muted">{{ r.reason or "" }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+
+<div class="pager">
+  {% if page > 1 %}<a class="btn" href="?page={{ page-1 }}">{{ icon("chevron-left", 12) }} {{ t("common.prev") }}</a>{% endif %}
+  <span>{{ t("common.page") }} {{ page }}</span>
+  {% if has_next %}<a class="btn" href="?page={{ page+1 }}">{{ t("common.next") }} {{ icon("chevron-right", 12) }}</a>{% endif %}
+</div>
+
+{% endblock %}

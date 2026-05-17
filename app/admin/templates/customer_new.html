@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("cust.new") }} · Admin{% endblock %}
+{% block crumbs %}<a href="/admin/customers/">{{ t("nav.customers") }}</a> / {{ t("cust.new") | lower }}{% endblock %}
+{% block content %}
+
+<div class="page-head"><div class="page-mark accent">{{ icon("users", 18) }}</div><h1>{{ t("cust.new") }}</h1></div>
+
+<div class="panel" style="max-width:600px">
+{% if error %}<div class="flash">{{ error }}</div>{% endif %}
+<form method="post" action="/admin/customers/new">
+  <div class="form-row">
+    <label>{{ t("cust.col.phone") }} *</label>
+    <input type="text" name="phone" required value="{{ phone or '' }}" placeholder="+998 90 123 45 67">
+  </div>
+  <div class="form-row">
+    <label>{{ t("cust.col.name") }}</label>
+    <input type="text" name="full_name" value="{{ full_name or '' }}" placeholder="">
+  </div>
+  <button class="btn primary" type="submit">{{ t("common.create") }}</button>
+  <a class="btn ghost" href="/admin/customers/">{{ t("common.cancel") }}</a>
+</form>
+</div>
+
+{% endblock %}

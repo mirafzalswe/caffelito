@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("staff.title") }} · Admin{% endblock %}
+{% block crumbs %}{{ t("staff.title") }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("user-cog", 18) }}</div>
+  <h1>{{ t("staff.title") }}</h1>
+</div>
+
+<div class="panel">
+{% if not rows %}
+  <div class="empty">
+    <div class="empty-mark">{{ icon("user-cog", 22) }}</div>
+    <p>{{ t("staff.empty") }}</p>
+  </div>
+{% else %}
+<table>
+  <thead><tr><th>{{ t("staff.col.name") }}</th><th>{{ t("staff.col.email") }}</th><th>{{ t("staff.col.role") }}</th><th>{{ t("staff.col.status") }}</th><th>{{ t("staff.col.tg") }}</th><th>{{ t("staff.col.created") }}</th></tr></thead>
+  <tbody>
+  {% for s in rows %}
+  <tr>
+    <td><b>{{ s.full_name }}</b></td>
+    <td>{{ s.email or "—" }}</td>
+    <td><span class="tag">{{ s.role }}</span></td>
+    <td>{% if s.status=='active' %}<span class="tag green">{{ t("status.active.fem") | lower }}</span>
+        {% else %}<span class="tag gray">{{ s.status }}</span>{% endif %}</td>
+    <td>{% if s.telegram_id %}<span class="tag green">{{ t("staff.tg.linked") }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td class="muted">{{ s.created_at | dt }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+
+{% if can_manage %}
+<div class="panel">
+<h2><span class="action-mark accent">{{ icon("plus", 14) }}</span> {{ t("staff.new") }}</h2>
+<form method="post" action="/admin/staff/new">
+  <div class="form-row"><label>{{ t("staff.col.name") }}</label><input type="text" name="full_name" required></div>
+  <div class="form-row">
+    <label>{{ t("staff.col.role") }}</label>
+    <select name="role" required onchange="
+      var r=this.value;
+      document.getElementById('pin-field').style.display = (r==='barista') ? 'grid' : 'none';
+      document.getElementById('web-fields').style.display = (r==='barista') ? 'none' : 'block';
+    ">
+      <option value="barista">{{ t("staff.role.barista") }}</option>
+      <option value="owner">{{ t("staff.role.owner") }}</option>
+    </select>
+  </div>
+  <div class="form-row" id="pin-field">
+    <label>{{ t("staff.pin") }}</label>
+    <input type="text" name="pin" pattern="\d{4,6}" placeholder="1234">
+  </div>
+  <div id="web-fields" style="display:none">
+    <div class="form-row"><label>{{ t("staff.col.email") }}</label><input type="email" name="email"></div>
+    <div class="form-row"><label>{{ t("staff.password") }}</label><input type="password" name="password" minlength="6"></div>
+  </div>
+  <div class="form-row"><label>{{ t("br.title") }}</label>
+    <div>
+    {% for b in branches %}
+    <label style="display:inline-flex;align-items:center;margin-right:1rem;font-weight:400;">
+      <input type="checkbox" name="branches" value="{{ b.id }}"> &nbsp;{{ b.name }}
+    </label>
+    {% endfor %}
+    </div>
+  </div>
+  <button class="btn primary" type="submit">{{ t("common.add") }}</button>
+</form>
+</div>
+{% endif %}
+
+{% endblock %}

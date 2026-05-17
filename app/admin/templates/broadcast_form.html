@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("bc.new") }} · Admin{% endblock %}
+{% block crumbs %}<a href="/admin/broadcasts/">{{ t("bc.title") }}</a> / {{ t("bc.new") | lower }}{% endblock %}
+{% block content %}
+
+<style>
+  .editor-toolbar {
+    display:flex; gap:.3rem; flex-wrap:wrap;
+    padding:.5rem; border:1px solid var(--border); border-bottom:none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--bg-soft);
+  }
+  .editor-toolbar button {
+    border:1px solid transparent; background:transparent;
+    padding:.35rem .65rem; border-radius: 6px;
+    font-size:.9rem; cursor:pointer; color: var(--text);
+    min-width: 32px;
+  }
+  .editor-toolbar button:hover { background: var(--bg-hover); border-color: var(--border); }
+  .editor-toolbar button.tb-bold     { font-weight: 700; }
+  .editor-toolbar button.tb-italic   { font-style: italic; }
+  .editor-toolbar button.tb-underline{ text-decoration: underline; }
+  .editor-toolbar button.tb-strike   { text-decoration: line-through; }
+  .editor-toolbar button.tb-code     { font-family: var(--font-mono); font-size:.85rem; }
+  .editor-toolbar .sep { width:1px; background: var(--border); margin:.15rem .25rem; }
+
+  .editor-body textarea {
+    border-top-left-radius: 0; border-top-right-radius: 0;
+    font-family: var(--font); font-size:.95rem; line-height:1.45;
+    min-height: 160px;
+  }
+
+  .preview-card {
+    margin-top: .85rem;
+    padding: .85rem 1rem;
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    background: var(--bg-soft);
+  }
+  .preview-card .preview-label {
+    font-size:.75rem; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing:.04em; font-weight: 600; margin-bottom:.5rem;
+  }
+  .preview-card .preview-bubble {
+    background: var(--surface); border:1px solid var(--border); border-radius: 12px;
+    padding: .75rem .95rem; max-width: 520px;
+    font-size:.95rem; line-height:1.45; white-space: pre-wrap; word-wrap: break-word;
+  }
+  .preview-card .preview-bubble :is(a) { color: var(--accent); }
+  .preview-card .preview-bubble :is(code) {
+    background: var(--gray-soft); padding: 1px 5px; border-radius: 4px;
+    font-family: var(--font-mono); font-size:.85em;
+  }
+  .preview-card .empty { color: var(--text-faint); font-style: italic; }
+</style>
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("send", 18) }}</div>
+  <h1>{{ t("bc.new") }}</h1>
+</div>
+
+<div class="panel" style="background: var(--accent-soft); border-color: var(--accent-soft); display:flex;gap:.6rem;align-items:center;">
+  <span>{{ icon("users", 16) }}</span>
+  <span>{{ t("bc.will_reach") }} <b>{{ recipients }}</b> {{ t("bc.linked_customers") }}</span>
+</div>
+
+<form method="post" action="/admin/broadcasts/new" enctype="multipart/form-data" id="bc-form">
+  <div class="panel">
+    <div class="form-row">
+      <label>{{ t("bc.body") }} *</label>
+
+      <div class="editor-toolbar" role="toolbar" aria-label="Форматирование">
+        <button type="button" class="tb-bold"      data-wrap="b"      title="{{ t('bc.fmt.bold') }}">B</button>
+        <button type="button" class="tb-italic"    data-wrap="i"      title="{{ t('bc.fmt.italic') }}">I</button>
+        <button type="button" class="tb-underline" data-wrap="u"      title="{{ t('bc.fmt.underline') }}">U</button>
+        <button type="button" class="tb-strike"    data-wrap="s"      title="{{ t('bc.fmt.strike') }}">S</button>
+        <span class="sep"></span>
+        <button type="button" class="tb-code"      data-wrap="code"   title="{{ t('bc.fmt.code') }}">&lt;/&gt;</button>
+        <button type="button"                      data-link="1"      title="{{ t('bc.fmt.link') }}">🔗</button>
+        <span class="sep"></span>
+        <button type="button"                      data-emoji="🎁"    title="{{ t('bc.fmt.emoji') }}">🎁</button>
+        <button type="button"                      data-emoji="☕"    title="{{ t('bc.fmt.emoji') }}">☕</button>
+        <button type="button"                      data-emoji="🔥"    title="{{ t('bc.fmt.emoji') }}">🔥</button>
+        <button type="button"                      data-emoji="🎉"    title="{{ t('bc.fmt.emoji') }}">🎉</button>
+      </div>
+
+      <div class="editor-body">
+        <textarea name="body" id="bc-body" rows="6" required placeholder="{{ t('bc.body_ph') }}"></textarea>
+      </div>
+      <small class="muted">{{ t("bc.body_hint") }}</small>
+
+      <div class="preview-card">
+        <div class="preview-label">{{ t("bc.preview") }}</div>
+        <div class="preview-bubble" id="bc-preview">
+          <span class="empty">{{ t("bc.preview_empty") }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label>{{ t("bc.media") }}</label>
+      <input type="file" name="media" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm">
+      <small class="muted">{{ t("bc.media_hint") }}</small>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn primary" type="submit">
+      {{ icon("send", 14) }} {{ t("bc.send_now", n=recipients) }}
+    </button>
+    <a class="btn ghost" href="/admin/broadcasts/">{{ t("common.cancel") }}</a>
+  </div>
+</form>
+
+<script>
+(function () {
+  const ta = document.getElementById('bc-body');
+  const preview = document.getElementById('bc-preview');
+  const placeholder = "{{ t('bc.preview_empty') }}";
+
+  // Telegram HTML whitelist — escape everything, allow listed tags back in.
+  const ALLOWED = /<\/?(b|strong|i|em|u|s|strike|del|code|pre|a)(\s+href="[^"<>"]*")?>/gi;
+
+  function escapeHtml(s) {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function renderPreview() {
+    const raw = ta.value;
+    if (!raw.trim()) {
+      preview.innerHTML = '<span class="empty">' + escapeHtml(placeholder) + '</span>';
+      return;
+    }
+    // Escape everything, then re-allow whitelisted tags by replacing their
+    // escaped form back. This keeps preview safe from <script>/onerror/etc.
+    let safe = escapeHtml(raw);
+    safe = safe.replace(
+      /&lt;(\/?(?:b|strong|i|em|u|s|strike|del|code|pre|a))((?:\s+href=&quot;[^&]*?&quot;)?)&gt;/gi,
+      function (_, tag, attrs) {
+        attrs = attrs.replace(/&quot;/g, '"');
+        return '<' + tag + attrs + '>';
+      }
+    );
+    preview.innerHTML = safe;
+  }
+
+  // ── Wrap selected text in a tag ────────────────────────────────────
+  function wrap(open, close) {
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const before = ta.value.slice(0, start);
+    const selected = ta.value.slice(start, end);
+    const after = ta.value.slice(end);
+    const inserted = open + (selected || '') + close;
+    ta.value = before + inserted + after;
+    // Place cursor inside the tags if nothing was selected.
+    const pos = selected ? start + inserted.length : start + open.length;
+    ta.focus();
+    ta.setSelectionRange(pos, pos);
+    renderPreview();
+  }
+
+  function insertAtCursor(text) {
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+    const pos = start + text.length;
+    ta.focus();
+    ta.setSelectionRange(pos, pos);
+    renderPreview();
+  }
+
+  document.querySelectorAll('.editor-toolbar button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const tag = btn.dataset.wrap;
+      const emoji = btn.dataset.emoji;
+      const isLink = btn.dataset.link === '1';
+      if (tag) {
+        wrap('<' + tag + '>', '</' + tag + '>');
+      } else if (isLink) {
+        const url = prompt("{{ t('bc.fmt.link_prompt') }}", 'https://');
+        if (!url) return;
+        const safeUrl = url.replace(/"/g, '&quot;');
+        const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+        if (sel) {
+          wrap('<a href="' + safeUrl + '">', '</a>');
+        } else {
+          insertAtCursor('<a href="' + safeUrl + '">' + safeUrl + '</a>');
+        }
+      } else if (emoji) {
+        insertAtCursor(emoji);
+      }
+    });
+  });
+
+  // Keyboard shortcuts: Ctrl/Cmd+B / I / U
+  ta.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const map = { b: 'b', i: 'i', u: 'u' };
+    const tag = map[e.key.toLowerCase()];
+    if (!tag) return;
+    e.preventDefault();
+    wrap('<' + tag + '>', '</' + tag + '>');
+  });
+
+  ta.addEventListener('input', renderPreview);
+  renderPreview();
+
+  // Disable submit button on submit (no double-send)
+  document.getElementById('bc-form').addEventListener('submit', function (e) {
+    const btn = this.querySelector('button[type="submit"]');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  });
+})();
+</script>
+
+{% endblock %}

@@ -1,0 +1,25 @@
+[Unit]
+Description=Coffee Loyalty — Customer Telegram bot
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=coffee
+Group=coffee
+WorkingDirectory=/opt/coffee-loyalty
+EnvironmentFile=/opt/coffee-loyalty/.env
+ExecStart=/opt/coffee-loyalty/.venv/bin/python -m app.bots.customer
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/coffee-loyalty
+
+[Install]
+WantedBy=multi-user.target

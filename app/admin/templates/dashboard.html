@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("dash.title") }} · Admin{% endblock %}
+{% block crumbs %}{{ t("dash.title") }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("dashboard", 18) }}</div>
+  <h1>{{ t("dash.title") }}</h1>
+</div>
+
+<div class="cards">
+  <div class="kpi">
+    <div class="kpi-icon accent">{{ icon("users", 16) }}</div>
+    <div class="label">{{ t("dash.kpi.customers") }}</div>
+    <div class="value">{{ kpis.customers_total }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-icon green">{{ icon("sparkles", 16) }}</div>
+    <div class="label">{{ t("dash.kpi.active30") }}</div>
+    <div class="value">{{ kpis.active_30d }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-icon accent">{{ icon("credit-card", 16) }}</div>
+    <div class="label">{{ t("dash.kpi.tx_today") }}</div>
+    <div class="value">{{ kpis.tx_today }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-icon green">{{ icon("wallet", 16) }}</div>
+    <div class="label">{{ t("dash.kpi.rev7") }}</div>
+    <div class="value">{{ kpis.revenue_7d | money }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-icon amber">{{ icon("gift", 16) }}</div>
+    <div class="label">{{ t("dash.kpi.free7") }}</div>
+    <div class="value">{{ kpis.free_redeems_7d }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-icon amber">{{ icon("box", 16) }}</div>
+    <div class="label">{{ t("dash.kpi.prepaid7") }}</div>
+    <div class="value">{{ kpis.prepaid_consumed_7d }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-icon accent">{{ icon("store", 16) }}</div>
+    <div class="label">{{ t("dash.kpi.branches") }}</div>
+    <div class="value">{{ branches_count }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-icon green">{{ icon("shield", 16) }}</div>
+    <div class="label">{{ t("dash.kpi.vip_count") }}</div>
+    <div class="value">{{ kpis.vip_count }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-icon amber">{{ icon("wallet", 16) }}</div>
+    <div class="label">{{ t("dash.kpi.vip_liability") }}</div>
+    <div class="value">{{ kpis.vip_liability | money }}</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2><span class="live-dot"></span> {{ t("dash.feed.title") }} <small class="muted" style="font-weight:400;font-size:.8rem;">{{ t("dash.feed.subtitle") }}</small></h2>
+  <div hx-get="/admin/feed" hx-trigger="load, every 5s" hx-swap="innerHTML">
+    <p class="muted">{{ t("dash.feed.loading") }}</p>
+  </div>
+</div>
+
+{% endblock %}

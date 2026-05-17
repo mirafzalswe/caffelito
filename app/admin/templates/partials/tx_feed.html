@@ -1,0 +1,36 @@
+{% from "_icons.html" import icon %}
+{% if not rows %}
+  <p class="muted">{{ t("tx.empty") }}</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>{{ t("tx.col.when") }}</th>
+      <th>{{ t("tx.col.type") }}</th>
+      <th>{{ t("tx.col.customer") }}</th>
+      <th>{{ t("tx.col.staff") }}</th>
+      <th>{{ t("tx.col.amount") }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.created_at | dt }}</td>
+      <td>
+        {% if r.type == 'purchase' %}<span class="tag">{{ icon("shopping-cart", 11) }} {{ t("hist.purchase") | lower }}</span>
+        {% elif r.type == 'redeem_free' %}<span class="tag green">{{ icon("gift", 11) }} {{ t("hist.free") | lower }}</span>
+        {% elif r.type == 'prepaid_consume' %}<span class="tag amber">{{ icon("box", 11) }} {{ t("hist.prepaid") | lower }}</span>
+        {% elif r.type == 'manual_grant' %}<span class="tag green">{{ icon("sparkles", 11) }} {{ t("hist.grant") | lower }}</span>
+        {% elif r.type == 'refund' %}<span class="tag red">{{ icon("undo", 11) }} {{ t("hist.refund") | lower }}</span>
+        {% else %}<span class="tag gray">{{ r.type }}</span>{% endif %}
+      </td>
+      <td><a href="/admin/customers/{{ r.user_id }}">{{ r.user_id | short }}</a></td>
+      <td class="muted">{{ r.staff_id | short }}</td>
+      <td>{% if r.total_amount %}{{ r.total_amount | money }} {{ r.currency }}{% else %}—{% endif %}</td>
+      <td><a class="btn ghost" href="/admin/transactions/{{ r.id }}">{{ icon("chevron-right", 14) }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}

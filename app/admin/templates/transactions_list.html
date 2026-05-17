@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("tx.title") }} · Admin{% endblock %}
+{% block crumbs %}{{ t("tx.title") }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="page-mark accent">{{ icon("credit-card", 18) }}</div>
+  <h1>{{ t("tx.title") }}</h1>
+</div>
+
+<form method="get" class="search">
+  <select name="type">
+    <option value="" {% if not type_filter %}selected{% endif %}>{{ t("tx.filter.all") }}</option>
+    <option value="purchase" {% if type_filter=='purchase' %}selected{% endif %}>{{ t("tx.filter.purchase") }}</option>
+    <option value="redeem_free" {% if type_filter=='redeem_free' %}selected{% endif %}>{{ t("tx.filter.free") }}</option>
+    <option value="prepaid_consume" {% if type_filter=='prepaid_consume' %}selected{% endif %}>{{ t("tx.filter.prepaid") }}</option>
+    <option value="refund" {% if type_filter=='refund' %}selected{% endif %}>{{ t("tx.filter.refund") }}</option>
+  </select>
+  <button class="btn primary">{{ t("common.apply") }}</button>
+</form>
+
+<div class="panel">
+{% if not rows %}
+  <div class="empty">
+    <div class="empty-mark">{{ icon("credit-card", 22) }}</div>
+    <p>{{ t("tx.empty") }}</p>
+  </div>
+{% else %}
+<table>
+  <thead><tr>
+    <th>{{ t("tx.col.when") }}</th><th>{{ t("tx.col.type") }}</th><th>{{ t("tx.col.customer") }}</th><th>{{ t("tx.col.amount") }}</th><th>{{ t("tx.col.branch") }}</th><th>{{ t("tx.col.staff") }}</th><th></th>
+  </tr></thead>
+  <tbody>
+    {% for tx in rows %}
+    <tr>
+      <td>{{ tx.created_at | dt }}</td>
+      <td>
+        {% if tx.type == 'purchase' %}<span class="tag">{{ icon("shopping-cart", 11) }} {{ t("hist.purchase") | lower }}</span>
+        {% elif tx.type == 'redeem_free' %}<span class="tag green">{{ icon("gift", 11) }} {{ t("hist.free") | lower }}</span>
+        {% elif tx.type == 'prepaid_consume' %}<span class="tag amber">{{ icon("box", 11) }} {{ t("hist.prepaid") | lower }}</span>
+        {% elif tx.type == 'manual_grant' %}<span class="tag green">{{ icon("sparkles", 11) }} {{ t("hist.grant") | lower }}</span>
+        {% elif tx.type == 'refund' %}<span class="tag red">{{ icon("undo", 11) }} {{ t("hist.refund") | lower }}</span>
+        {% else %}<span class="tag gray">{{ tx.type }}</span>{% endif %}
+      </td>
+      <td><a href="/admin/customers/{{ tx.user_id }}">{{ tx.user_id | short }}</a></td>
+      <td>{% if tx.total_amount %}{{ tx.total_amount | money }} {{ tx.currency }}{% else %}—{% endif %}</td>
+      <td class="muted">{{ tx.branch_id | short }}</td>
+      <td class="muted">{{ tx.staff_id | short }}</td>
+      <td><a class="btn ghost" href="/admin/transactions/{{ tx.id }}">{{ icon("chevron-right", 14) }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+
+<div class="pager">
+  {% if page > 1 %}<a class="btn" href="?type={{ type_filter }}&page={{ page-1 }}">{{ icon("chevron-left", 12) }} {{ t("common.prev") }}</a>{% endif %}
+  <span>{{ t("common.page") }} {{ page }}</span>
+  {% if has_next %}<a class="btn" href="?type={{ type_filter }}&page={{ page+1 }}">{{ t("common.next") }} {{ icon("chevron-right", 12) }}</a>{% endif %}
+</div>
+{% endblock %}
