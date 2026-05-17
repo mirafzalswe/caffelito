@@ -19,6 +19,21 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+# Warn if RAM is below 2 GB — 512 MB / 1 GB hosts will OOM under Postgres+Redis+4 python procs.
+MEM_MB=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+if (( MEM_MB < 1800 )); then
+    echo
+    echo "  WARNING: detected ${MEM_MB} MB RAM. Minimum recommended is 2048 MB (ideally 4096)."
+    echo "  Creating a 2 GB swapfile as safety net..."
+    if [[ ! -f /swapfile ]]; then
+        fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
+fi
+
 log "Updating apt and installing base packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
@@ -30,12 +45,14 @@ apt-get install -y --no-install-recommends \
     redis-server \
     software-properties-common
 
-log "Installing Python 3.12 (deadsnakes PPA if needed)"
+log "Installing Python 3.12 + venv + dev headers"
+# On Ubuntu 24.04 python3.12 is preinstalled but -venv / -dev are not.
+# On Ubuntu 22.04 we need the deadsnakes PPA for python3.12 at all.
 if ! command -v $PYTHON_BIN >/dev/null 2>&1; then
     add-apt-repository -y ppa:deadsnakes/ppa
     apt-get update -y
-    apt-get install -y $PYTHON_BIN $PYTHON_BIN-venv $PYTHON_BIN-dev
 fi
+apt-get install -y $PYTHON_BIN $PYTHON_BIN-venv $PYTHON_BIN-dev
 
 log "Creating system user '$APP_USER'"
 id -u "$APP_USER" >/dev/null 2>&1 || useradd --system --create-home --shell /bin/bash "$APP_USER"
