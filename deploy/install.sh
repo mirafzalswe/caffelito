@@ -94,7 +94,7 @@ if [[ ! -f "$APP_DIR/.env" ]]; then
     SECRET_JWT="$(openssl rand -hex 32)"
     SECRET_WH="$(openssl rand -hex 32)"
     sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql+asyncpg://$DB_USER:$DB_PASS@127.0.0.1:5432/$DB_NAME|" "$APP_DIR/.env"
-    sed -i "s|^APP_ENV=.*|APP_ENV=production|" "$APP_DIR/.env"
+    sed -i "s|^APP_ENV=.*|APP_ENV=prod|" "$APP_DIR/.env"
     sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" "$APP_DIR/.env"
     sed -i "s|^SECURITY_PEPPER=.*|SECURITY_PEPPER=$SECRET_PEPPER|" "$APP_DIR/.env"
     sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$SECRET_JWT|" "$APP_DIR/.env"
