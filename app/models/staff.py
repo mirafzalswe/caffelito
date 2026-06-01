@@ -13,6 +13,7 @@ class Staff(Base):
     __tablename__ = "staff"
     __table_args__ = (
         UniqueConstraint("tenant_id", "email", name="uq_staff_tenant_email"),
+        UniqueConstraint("tenant_id", "username", name="uq_staff_tenant_username"),
         CheckConstraint(
             "role IN ('owner','barista')",
             name="role_valid",
@@ -28,6 +29,10 @@ class Staff(Base):
     )
 
     email: Mapped[str | None] = mapped_column(CITEXT(), nullable=True)
+    # Login identifier for the web admin (owner) and the staff bot lookup.
+    # Case-insensitive, unique per tenant. Nullable at the DB level for
+    # backward compatibility with rows created before this column existed.
+    username: Mapped[str | None] = mapped_column(CITEXT(), nullable=True)
     phone_e164: Mapped[PhoneE164 | None] = mapped_column(String(20), nullable=True)  # type: ignore[assignment]
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     telegram_id: Mapped[TgId]

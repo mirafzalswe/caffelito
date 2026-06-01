@@ -64,6 +64,12 @@ async def list_broadcasts(
         .limit(50)
     )).scalars().all()
     recipients = await count_eligible_recipients(db, tenant_id=tenant.id)
+    flash = None
+    flash_kind = None
+    if request.query_params.get("ok") == "deleted":
+        flash, flash_kind = "🗑 Рассылка удалена.", "success"
+    elif request.query_params.get("err") == "sending":
+        flash = "⚠️ Нельзя удалить рассылку во время отправки."
     return templates.TemplateResponse(
         request, "broadcasts_list.html",
         {
@@ -74,6 +80,8 @@ async def list_broadcasts(
             "rows": rows,
             "recipients": recipients,
             "can_manage": _can_manage(admin.role),
+            "flash": flash,
+            "flash_kind": flash_kind,
         },
     )
 
@@ -100,20 +108,41 @@ async def new_form(
     )
 
 
-@router.post("/new")
+async def _render_form(request, db, admin, tenant, *, error, body=""):
+    recipients = await count_eligible_recipients(db, tenant_id=tenant.id)
+    return templates.TemplateResponse(
+        request, "broadcast_form.html",
+        {
+            "section": "broadcasts",
+            "admin": admin,
+            "tenant_name": tenant.name,
+            "app_version": __version__,
+            "recipients": recipients,
+            "flash": error,
+            "flash_kind": "",
+            "body": body,
+        },
+        status_code=400,
+    )
+
+
+@router.post("/new", response_model=None)
 async def create_and_send(
+    request: Request,
     db: SessionDep,
     admin: CurrentAdminDep,
     tenant: CurrentTenantDep,
     body: str = Form(...),
     media: UploadFile | None = File(default=None),
-) -> RedirectResponse:
+):
     if not _can_manage(admin.role):
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 
     body = body.strip()
     if not body:
-        raise HTTPException(400, "Сообщение не может быть пустым")
+        return await _render_form(
+            request, db, admin, tenant, error="❗ Сообщение не может быть пустым"
+        )
 
     bcast = Broadcast(
         tenant_id=tenant.id,
@@ -135,7 +164,11 @@ async def create_and_send(
                 if size > _MAX_BYTES:
                     fh.close()
                     target.unlink(missing_ok=True)
-                    raise HTTPException(400, "Файл превышает 50 МБ")
+                    await db.rollback()
+                    return await _render_form(
+                        request, db, admin, tenant,
+                        error="❗ Файл превышает 50 МБ", body=body,
+                    )
                 fh.write(chunk)
         bcast.media_path = str(target)
         bcast.media_type = media_type
@@ -187,3 +220,45 @@ async def detail(
             "b": bcast,
         },
     )
+
+
+@router.post("/{broadcast_id}/delete")
+async def delete_broadcast(
+    broadcast_id: uuid.UUID,
+    db: SessionDep,
+    admin: CurrentAdminDep,
+    tenant: CurrentTenantDep,
+) -> RedirectResponse:
+    """Delete a broadcast log entry (and its media file). Refuse while it is
+    still actively sending so we don't yank a row out from under the worker."""
+    if not _can_manage(admin.role):
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+    bcast = (await db.execute(
+        select(Broadcast).where(
+            Broadcast.id == broadcast_id, Broadcast.tenant_id == tenant.id
+        )
+    )).scalar_one_or_none()
+    if bcast is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    if bcast.status == "sending":
+        return RedirectResponse("/admin/broadcasts/?err=sending", status_code=303)
+
+    if bcast.media_path:
+        try:
+            Path(bcast.media_path).unlink(missing_ok=True)
+        except OSError:
+            pass  # best-effort cleanup; the row still goes away
+
+    await db.delete(bcast)
+    await record_audit(
+        db,
+        tenant_id=tenant.id,
+        actor_type="staff",
+        actor_id=admin.id,
+        action="broadcast.delete",
+        target_type="broadcast",
+        target_id=broadcast_id,
+        before={"status": bcast.status},
+    )
+    await db.commit()
+    return RedirectResponse("/admin/broadcasts/?ok=deleted", status_code=303)

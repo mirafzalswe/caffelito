@@ -52,6 +52,45 @@ def _can_manage(role: str) -> bool:
     return role == "owner"
 
 
+# Ordered product groups for the barista's purchase picker. Each product is
+# bucketed by its ``category`` plus a hot/cold heuristic on the name/SKU, so the
+# barista taps a tab instead of scrolling one giant dropdown.
+_PRODUCT_GROUPS = (
+    ("hot", "☕ Горячий кофе"),
+    ("cold", "🧊 Холодное"),
+    ("sweet", "🍰 Сладкое"),
+    ("other", "Другое"),
+)
+_COLD_HINTS = (
+    "айс", "ice", "фрап", "frap", "бамбл", "bumble", "колд", "cold",
+    "лимонад", "мохито", "милкшейк", "смузи", "shake", "тоник", "tonic",
+)
+
+
+def _product_group(p: Product) -> str:
+    name = (p.name or "").lower()
+    sku = (p.sku or "").lower()
+    category = (p.category or "").lower()
+    is_cold = any(h in name for h in _COLD_HINTS) or any(
+        sku.startswith(x) for x in ("ice", "frap", "bumble", "cold")
+    )
+    if category == "coffee":
+        return "cold" if is_cold else "hot"
+    if category == "food":
+        return "sweet"
+    if category == "drink":
+        return "cold"
+    return "other"
+
+
+def _group_products(products) -> list[tuple[str, str, list]]:
+    """Return ordered ``(key, label, products)`` groups, skipping empty ones."""
+    buckets: dict[str, list] = {key: [] for key, _ in _PRODUCT_GROUPS}
+    for p in products:
+        buckets[_product_group(p)].append(p)
+    return [(key, label, buckets[key]) for key, label in _PRODUCT_GROUPS if buckets[key]]
+
+
 def _accept_crid(received: str | None, namespace: str) -> str:
     """Use the form-supplied idempotency key if it looks valid; else generate
     a fresh one. Validates length and char-set so a malformed/long string can't
@@ -98,6 +137,11 @@ async def list_customers(
             .offset((page - 1) * per_page)
         )
     ).scalars().all()
+    flash = None
+    flash_kind = None
+    if request.query_params.get("ok") in _OK_FLASH:
+        flash = _OK_FLASH[request.query_params["ok"]]
+        flash_kind = "success"
     return templates.TemplateResponse(
         request,
         "customers_list.html",
@@ -111,6 +155,8 @@ async def list_customers(
             "page": page,
             "has_next": len(rows) == per_page,
             "can_manage": _can_manage(admin.role),
+            "flash": flash,
+            "flash_kind": flash_kind,
         },
     )
 
@@ -214,6 +260,7 @@ _OK_FLASH = {
     "blocked":  "🚫 Клиент заблокирован.",
     "unblocked":"✅ Клиент разблокирован.",
     "created":  "✅ Клиент создан.",
+    "deleted":  "🗑 Клиент удалён.",
 }
 
 
@@ -353,18 +400,20 @@ async def detail(
             )
         )
     ).scalars().all()
-    # Loyalty-eligible products only (бариста начисляет покупки, не аддоны/чай).
+    # All active products — the barista needs to be able to ring up sweets and
+    # food too, not just loyalty-eligible coffee. Stamps still only accrue on
+    # loyalty-eligible items inside the engine.
     products = (
         await db.execute(
             select(Product)
             .where(
                 Product.tenant_id == tenant.id,
                 Product.is_active == True,  # noqa: E712
-                Product.is_loyalty_eligible == True,  # noqa: E712
             )
             .order_by(Product.name, Product.size)
         )
     ).scalars().all()
+    product_groups = _group_products(products)
 
     flash = None
     flash_kind = None
@@ -408,6 +457,7 @@ async def detail(
             "active_cards": active_cards,
             "branches": branches,
             "products": products,
+            "product_groups": product_groups,
             "punchcard_campaigns": punchcard_campaigns,
             "tier_campaigns": tier_campaigns,
             "active_membership": active_membership,
@@ -499,6 +549,35 @@ async def unblock_customer(
     return _back(user_id, ok="unblocked")
 
 
+@router.post("/{user_id}/delete")
+async def delete_customer(
+    user_id: uuid.UUID,
+    db: SessionDep,
+    admin: CurrentAdminDep,
+    tenant: CurrentTenantDep,
+) -> RedirectResponse:
+    """Soft-delete a customer (stamps ``deleted_at``); the row stays for
+    transaction history but drops out of the customer list and lookups."""
+    if not _can_manage(admin.role):
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+    from app.core.clock import now
+
+    user = await _load_user(db, user_id, tenant.id)
+    user.deleted_at = now()
+    await record_audit(
+        db,
+        tenant_id=tenant.id,
+        actor_type="staff",
+        actor_id=admin.id,
+        action="user.delete",
+        target_type="user",
+        target_id=user.id,
+        before={"phone": user.phone_e164},
+    )
+    await db.commit()
+    return RedirectResponse("/admin/customers/?ok=deleted", status_code=303)
+
+
 # ---------------------------------------------------------------------------
 # Manual purchase
 # ---------------------------------------------------------------------------
@@ -514,6 +593,7 @@ async def admin_record_purchase(
     product_id: uuid.UUID = Form(...),
     qty: int = Form(1),
     campaign_id: str = Form(""),
+    cashback_to_spend: str = Form(""),
     client_request_id: str = Form(""),
 ) -> RedirectResponse:
     if not _can_manage(admin.role):
@@ -529,6 +609,15 @@ async def admin_record_purchase(
         except ValueError:
             return _back(user_id, err="Невалидный ID акции")
 
+    cashback_amount = Decimal("0.00")
+    if cashback_to_spend.strip():
+        try:
+            cashback_amount = Decimal(cashback_to_spend.strip().replace(",", "."))
+        except InvalidOperation:
+            return _back(user_id, err="Невалидная сумма кэшбэка")
+        if cashback_amount < 0:
+            return _back(user_id, err="Сумма кэшбэка не может быть отрицательной")
+
     crid = _accept_crid(client_request_id, "purchase")
     try:
         req = PurchaseRequest(
@@ -541,6 +630,7 @@ async def admin_record_purchase(
             currency=tenant.default_currency,
             source="admin_panel",
             force_campaign_id=force_campaign,
+            cashback_to_spend=cashback_amount,
         )
         result = await record_purchase(db, request=req)
     except DomainError as exc:
@@ -579,6 +669,10 @@ async def admin_record_purchase(
     ))
 
     bits = ["✅ Покупка начислена"]
+    if result.cashback_spent > 0:
+        bits.append(
+            f"💳 оплачено кэшбэком {result.cashback_spent} · к оплате {result.cash_due}"
+        )
     if total_stamps > 0:
         bits.append(f"+{total_stamps} штамп(ов)")
     if result.free_coffees_unlocked:
@@ -871,6 +965,38 @@ async def admin_activate_membership(
         user_id,
         info=f"🎫 VIP-абонемент активирован: −{m.discount_percent}% до {expires}",
     )
+
+
+@router.post("/{user_id}/membership/cancel")
+async def admin_cancel_membership(
+    user_id: uuid.UUID,
+    db: SessionDep,
+    admin: CurrentAdminDep,
+    tenant: CurrentTenantDep,
+) -> RedirectResponse:
+    if not _can_manage(admin.role):
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+    user = await _load_user(db, user_id, tenant.id)
+
+    m = await membership_svc.cancel_membership(
+        db, tenant_id=tenant.id, user_id=user.id
+    )
+    if m is None:
+        return _back(user_id, err="У клиента нет активного абонемента")
+
+    await record_audit(
+        db,
+        tenant_id=tenant.id,
+        actor_type="staff",
+        actor_id=admin.id,
+        action="membership.cancel",
+        target_type="user",
+        target_id=user.id,
+        before={"status": "active", "balance_remaining": str(m.balance_remaining)},
+        after={"status": "cancelled"},
+    )
+    await db.commit()
+    return _back(user_id, info="🚫 VIP-абонемент отменён")
 
 
 @router.post("/{user_id}/prepaid")

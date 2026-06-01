@@ -85,7 +85,11 @@ async def transaction_detail(
         )
     ).scalars().all()
     customer = (
-        await db.execute(select(User).where(User.id == tx.user_id))
+        await db.execute(
+            select(User).where(
+                User.id == tx.user_id, User.tenant_id == tenant.id
+            )
+        )
     ).scalar_one_or_none()
 
     return templates.TemplateResponse(

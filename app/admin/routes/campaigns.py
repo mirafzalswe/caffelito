@@ -7,14 +7,21 @@ import uuid
 
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app import __version__
 from app.admin.deps import CurrentAdminDep, CurrentTenantDep, SessionDep
 from app.admin.templating import templates
 from app.core.clock import now
 from app.domain.audit import record_audit
-from app.models import Branch, Campaign, CampaignBranch
+from app.models import (
+    Branch,
+    Campaign,
+    CampaignBranch,
+    LoyaltyCard,
+    Membership,
+    PrepaidPackage,
+)
 from app.models.campaign import CAMPAIGN_TYPES
 
 router = APIRouter(prefix="/campaigns")
@@ -285,3 +292,62 @@ async def update(
     )
     await db.commit()
     return RedirectResponse(f"/admin/campaigns/{campaign_id}?saved=1", status_code=303)
+
+
+@router.post("/{campaign_id}/delete")
+async def delete_campaign(
+    campaign_id: uuid.UUID,
+    db: SessionDep,
+    admin: CurrentAdminDep,
+    tenant: CurrentTenantDep,
+) -> RedirectResponse:
+    """Delete a campaign. Hard-delete only if no customer ever used it
+    (no loyalty cards / memberships / prepaid packages reference it);
+    otherwise archive it so historical instances keep their campaign link."""
+    if not _can_manage(admin.role):
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+    camp = (
+        await db.execute(
+            select(Campaign).where(
+                Campaign.id == campaign_id, Campaign.tenant_id == tenant.id
+            )
+        )
+    ).scalar_one_or_none()
+    if camp is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+    used = 0
+    for model in (LoyaltyCard, Membership, PrepaidPackage):
+        used += (
+            await db.execute(
+                select(func.count())
+                .select_from(model)
+                .where(model.campaign_id == campaign_id)
+            )
+        ).scalar() or 0
+
+    if used:
+        camp.status = "archived"
+        camp.updated_at = now()
+        action = "campaign.archive"
+    else:
+        await db.execute(
+            CampaignBranch.__table__.delete().where(
+                CampaignBranch.campaign_id == camp.id
+            )
+        )
+        await db.delete(camp)
+        action = "campaign.delete"
+
+    await record_audit(
+        db,
+        tenant_id=tenant.id,
+        actor_type="staff",
+        actor_id=admin.id,
+        action=action,
+        target_type="campaign",
+        target_id=campaign_id,
+        before={"name": camp.name, "status": camp.status},
+    )
+    await db.commit()
+    return RedirectResponse("/admin/campaigns/", status_code=303)

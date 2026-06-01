@@ -29,8 +29,12 @@ from app.models import (
 
 DEMO_TENANT_SLUG = "demo"
 DEMO_BARISTA_PIN = "1234"
+DEMO_BARISTA_USERNAME = "barista"
+DEMO_BARISTA_PHONE = "+998901112233"
 DEMO_OWNER_EMAIL = "mirafzal"
+DEMO_OWNER_USERNAME = "mirafzal"
 DEMO_OWNER_PASSWORD = "mirafzal"
+DEMO_OWNER_PHONE = "+998900000000"
 DEMO_CURRENCY = "UZS"
 
 # (sku, name, category, size, base_price, loyalty_eligible)
@@ -349,6 +353,9 @@ async def seed() -> None:
                 full_name="Demo Barista",
                 role="barista",
                 status="active",
+                username=DEMO_BARISTA_USERNAME,
+                phone_e164=DEMO_BARISTA_PHONE,
+                password_hash=hash_secret(DEMO_BARISTA_PIN),
                 pin_hash=hash_secret(DEMO_BARISTA_PIN),
             )
             session.add(barista)
@@ -369,6 +376,8 @@ async def seed() -> None:
                 tenant_id=tenant.id,
                 full_name="Demo Owner",
                 email=DEMO_OWNER_EMAIL,
+                username=DEMO_OWNER_USERNAME,
+                phone_e164=DEMO_OWNER_PHONE,
                 role="owner",
                 status="active",
                 password_hash=hash_secret(DEMO_OWNER_PASSWORD),
@@ -378,14 +387,14 @@ async def seed() -> None:
             session.add(StaffBranch(staff_id=owner.id, branch_id=branch.id))
             print(
                 f"Created owner: {owner.id};\n"
-                f"  Admin login: {DEMO_OWNER_EMAIL} / {DEMO_OWNER_PASSWORD}"
+                f"  Admin login: {DEMO_OWNER_USERNAME} / {DEMO_OWNER_PASSWORD}"
             )
 
     print("Seed OK.")
     print(f"Set BOT_TENANT_ID={tenant.id} in .env if you have multiple tenants.")
     print(
         "\nLog into admin: http://127.0.0.1:8000/admin/login\n"
-        f"  email:    {DEMO_OWNER_EMAIL}\n"
+        f"  username: {DEMO_OWNER_USERNAME}\n"
         f"  password: {DEMO_OWNER_PASSWORD}"
     )
 

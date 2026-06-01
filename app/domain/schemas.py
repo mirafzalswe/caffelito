@@ -33,6 +33,10 @@ class PurchaseRequest:
     payment_method: str | None = None
     source: str = "staff_bot"
     notes: str | None = None
+    # Amount of accumulated cashback the customer wants to put toward this
+    # purchase. Capped at the money total of the bill; the remainder is paid
+    # in cash. ``Decimal("0")`` means a normal full-cash purchase.
+    cashback_to_spend: Decimal = Decimal("0.00")
     # Admin override: when set, ONLY this campaign is applied (works for
     # ``punchcard`` and ``cashback`` types), bypassing the automatic
     # stackable+priority resolution.
@@ -47,6 +51,10 @@ class PurchaseResult:
     cards_completed: list[uuid.UUID] = field(default_factory=list)
     free_coffees_unlocked: int = 0
     cashback_earned: Decimal = Decimal("0.00")
+    # Cashback actually applied as payment on this purchase, and the cash the
+    # customer still owes after that (``total_amount - cashback_spent``).
+    cashback_spent: Decimal = Decimal("0.00")
+    cash_due: Decimal = Decimal("0.00")
     prepaid_consumed_per_pkg: dict[uuid.UUID, int] = field(default_factory=dict)
     # VIP membership info if the purchase used one.
     vip_charged: Decimal | None = None

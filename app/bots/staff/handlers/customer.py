@@ -19,7 +19,9 @@ from app.core.db import session_scope
 from app.core.logging import get_logger
 from app.core.phone import mask_phone
 from app.core.security import random_token
+from app.domain import membership as membership_svc
 from app.domain import redeem
+from app.domain.audit import record_audit
 from app.domain.dashboard import read_dashboard
 from app.domain.errors import (
     CooldownActive,
@@ -82,6 +84,9 @@ async def on_find_input(message: Message, state: FSMContext) -> None:
             .limit(6)
         )
         products = list((await session.execute(prod_stmt)).scalars().all())
+        active_membership = await membership_svc.get_active_membership(
+            session, tenant_id=tenant_id, user_id=user.id
+        )
 
     data = await state.get_data()
     data["customer_id"] = str(user.id)
@@ -100,6 +105,7 @@ async def on_find_input(message: Message, state: FSMContext) -> None:
         has_free=view.free_coffees_available > 0,
         has_prepaid=view.prepaid_remaining > 0,
         products=[(p.id, _short_label(p), str(p.base_price)) for p in products],
+        has_membership=active_membership is not None,
     )
     await message.answer(summary, parse_mode="HTML", reply_markup=keyboards.main_menu_kb())
     await message.answer("Действия:", reply_markup=kb)
@@ -164,6 +170,70 @@ async def on_add_product(query: CallbackQuery, state: FSMContext) -> None:
         + ("\n🎁 Открыт бесплатный кофе!" if result.free_coffees_unlocked else ""),
         parse_mode="HTML",
     )
+
+
+# ---------------------------------------------------------------------------
+# Cancel VIP membership ("remove the campaign for this customer")
+# ---------------------------------------------------------------------------
+
+
+@router.callback_query(Work.customer_active, F.data == "vip_cancel")
+async def on_vip_cancel_prompt(query: CallbackQuery, state: FSMContext) -> None:
+    if not query.message:
+        return
+    await query.message.answer(  # type: ignore[union-attr]
+        "Отменить VIP-абонемент клиента?\n"
+        "Остаток депозита автоматически не возвращается.",
+        reply_markup=keyboards.confirm_kb(yes_data="vip_cancel_yes", no_data="vip_cancel_no"),
+    )
+    await query.answer()
+
+
+@router.callback_query(Work.customer_active, F.data == "vip_cancel_no")
+async def on_vip_cancel_no(query: CallbackQuery, state: FSMContext) -> None:
+    await query.answer("Отмена операции")
+    if query.message:
+        await query.message.answer("Окей, абонемент оставлен.")  # type: ignore[union-attr]
+
+
+@router.callback_query(Work.customer_active, F.data == "vip_cancel_yes")
+async def on_vip_cancel_yes(query: CallbackQuery, state: FSMContext) -> None:
+    if not query.message:
+        return
+    data = await state.get_data()
+    customer_id = uuid.UUID(data["customer_id"])
+    staff_id = uuid.UUID(data["staff_id"])
+
+    try:
+        async with session_scope() as session:
+            tenant_id = await resolve_tenant(session)
+            m = await membership_svc.cancel_membership(
+                session, tenant_id=tenant_id, user_id=customer_id
+            )
+            if m is None:
+                await query.answer("У клиента нет активного абонемента", show_alert=True)
+                return
+            await record_audit(
+                session,
+                tenant_id=tenant_id,
+                actor_type="staff",
+                actor_id=staff_id,
+                action="membership.cancel",
+                target_type="user",
+                target_id=customer_id,
+                before={"status": "active", "balance_remaining": str(m.balance_remaining)},
+                after={"status": "cancelled"},
+            )
+    except DomainError as exc:
+        await query.answer(f"❗ {exc}", show_alert=True)
+        return
+    except Exception as exc:  # noqa: BLE001
+        log.exception("vip_cancel_failed", error=str(exc))
+        await query.answer("Ошибка. Попробуйте ещё раз.", show_alert=True)
+        return
+
+    await query.answer("Абонемент отменён")
+    await query.message.answer("🚫 VIP-абонемент клиента отменён.")  # type: ignore[union-attr]
 
 
 # ---------------------------------------------------------------------------

@@ -275,6 +275,10 @@
       <button class="btn primary" type="submit">{{ t("cust.unblock") }}</button>
     </form>
     {% endif %}
+    <form method="post" action="/admin/customers/{{ user.id }}/delete"
+          onsubmit="return confirm('{{ t('cust.delete_confirm') }}')">
+      <button class="btn ghost danger" type="submit">{{ icon("trash", 14) }} {{ t("common.delete") }}</button>
+    </form>
     </div>
   {% endif %}
 </section>
@@ -334,6 +338,15 @@
     <div class="kpi-val">{{ active_membership.balance_remaining | money }}<span class="muted" style="font-size:.95rem;font-weight:500"> / {{ active_membership.amount_paid | money }}</span></div>
     <div class="kpi-sub">{{ active_membership_name or "—" }}{% if active_membership.expires_at %} · {{ t("kpi.vip_until", dt=active_membership.expires_at | dt) }}{% endif %}</div>
     <div class="kpi-progress" style="margin-top:.5rem;"><i style="width: {{ vip_pct }}%; background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);"></i></div>
+    {% if can_manage and user.status == 'active' %}
+    <form method="post" action="/admin/customers/{{ user.id }}/membership/cancel"
+          style="margin-top:.55rem;"
+          onsubmit="return confirm('{{ t('act.vip.cancel_confirm') }}')">
+      <button type="submit" class="btn ghost danger" style="width:100%;font-size:.8rem;">
+        {{ icon("ban", 12) }} {{ t("act.vip.cancel") }}
+      </button>
+    </form>
+    {% endif %}
   </div>
   {% elif vip_exhausted %}
   <div class="kpi amber" style="border-color: var(--warning); box-shadow: 0 0 0 3px var(--warning-soft);">
@@ -345,7 +358,7 @@
     <button type="button" class="kpi-btn"
             style="background:var(--warning);border-color:var(--warning);"
             onclick="document.querySelector('.action-tab input[value=\'vip\']').click(); window.scrollTo({top: document.querySelector('.action-card').offsetTop - 20, behavior: 'smooth'});">
-      {{ icon("plus", 14) }} Пополнить VIP
+      {{ icon("plus", 14) }} {{ t("act.btn.topup_vip") }}
     </button>
     {% endif %}
   </div>
@@ -385,19 +398,32 @@
     {% if not products %}
       <p class="muted">{{ t("act.no_products") }} <a href="/admin/products/">{{ t("act.add") }}</a></p>
     {% else %}
-    <div class="form-grid-2">
-      <div class="form-row">
-        <label>{{ t("act.product") }}</label>
-        <select name="product_id" required>
-          {% for p in products %}
-          <option value="{{ p.id }}">{{ p.name }}{% if p.size %} {{ p.size }}{% endif %} — {{ p.base_price | money }}</option>
-          {% endfor %}
-        </select>
+    <div class="form-row">
+      <label>{{ t("act.product") }}</label>
+      <input type="hidden" name="product_id" id="bc-prod-id">
+      <input type="text" class="prod-search" id="bc-prod-search" placeholder="🔎 {{ t('common.search') }}…" autocomplete="off">
+      <div class="prod-tabs" id="bc-prod-tabs">
+        <button type="button" class="prod-tab active" data-group="all">{{ t("common.all") }}</button>
+        {% for key, label, items in product_groups %}
+        <button type="button" class="prod-tab" data-group="{{ key }}">{{ label }}</button>
+        {% endfor %}
       </div>
-      <div class="form-row">
-        <label>{{ t("act.qty") }}</label>
-        <input type="number" name="qty" value="1" min="1" max="50" required>
+      <div class="prod-grid" id="bc-prod-grid">
+        {% for key, label, items in product_groups %}{% for p in items %}
+        <button type="button" class="prod-tile" data-group="{{ key }}"
+                data-id="{{ p.id }}"
+                data-search="{{ (p.name ~ ' ' ~ (p.size or '') ~ ' ' ~ (p.sku or '')) | lower }}"
+                data-name="{{ p.name }}{% if p.size %} {{ p.size }}{% endif %}">
+          <span class="pt-name">{{ p.name }}{% if p.size %} <small>{{ p.size }}</small>{% endif %}</span>
+          <span class="pt-price">{{ p.base_price | money }}</span>
+        </button>
+        {% endfor %}{% endfor %}
       </div>
+      <div class="prod-selected muted" id="bc-prod-selected"></div>
+    </div>
+    <div class="form-row" style="max-width:180px;">
+      <label>{{ t("act.qty") }}</label>
+      <input type="number" name="qty" value="1" min="1" max="50" required>
     </div>
     <div class="form-row">
       <label>{{ t("act.campaign_auto") }}</label>
@@ -445,6 +471,17 @@
       </small>
       {% endif %}
     </div>
+    {% if not active_membership and view.cashback_balance and view.cashback_balance > 0 %}
+    <div class="form-row cashback-pay-row">
+      <label>{{ icon("wallet", 13) }} {{ t("act.pay_cashback") }}</label>
+      <div class="cashback-pay">
+        <input type="number" name="cashback_to_spend" id="bc-cashback"
+               min="0" step="any" max="{{ view.cashback_balance }}" value="0" placeholder="0">
+        <button type="button" class="btn ghost" id="bc-cashback-max">{{ t("act.pay_cashback.all") }} ({{ view.cashback_balance | money }})</button>
+      </div>
+      <small class="muted">{{ t("act.pay_cashback.hint", bal=view.cashback_balance | money, ccy=currency) }}</small>
+    </div>
+    {% endif %}
     <div class="submit-row"><button class="btn primary" type="submit">{{ icon("shopping-cart", 14) }} {{ t("act.btn.purchase") }}</button></div>
     {% endif %}
   </form>
@@ -495,7 +532,7 @@
       </div>
     </div>
     <div class="submit-row"><button class="btn primary" type="submit">{{ icon("shield", 14) }}
-      {% if is_topup %}Пополнить VIP{% else %}{{ t("act.btn.activate_vip") }}{% endif %}
+      {% if is_topup %}{{ t("act.btn.topup_vip") }}{% else %}{{ t("act.btn.activate_vip") }}{% endif %}
     </button></div>
     {% endif %}
   </form>
@@ -674,8 +711,70 @@
     });
   });
 
+  // Product picker — category tabs + live search + tap-to-select tiles.
+  (function () {
+    var grid = document.getElementById('bc-prod-grid');
+    if (!grid) return;
+    var hidden = document.getElementById('bc-prod-id');
+    var label = null;
+    var search = document.getElementById('bc-prod-search');
+    var tabs = document.getElementById('bc-prod-tabs');
+    var tiles = Array.prototype.slice.call(grid.querySelectorAll('.prod-tile'));
+    var group = 'all';
+
+    function applyFilter() {
+      var q = (search && search.value || '').trim().toLowerCase();
+      tiles.forEach(function (t) {
+        var okGroup = group === 'all' || t.dataset.group === group;
+        var okSearch = !q || (t.dataset.search || '').indexOf(q) !== -1;
+        t.style.display = (okGroup && okSearch) ? '' : 'none';
+      });
+    }
+    var selectedLabel = document.getElementById('bc-prod-selected');
+    function select(tile) {
+      tiles.forEach(function (t) { t.classList.remove('selected'); });
+      tile.classList.add('selected');
+      if (hidden) hidden.value = tile.dataset.id || '';
+      if (selectedLabel) selectedLabel.textContent = '✓ ' + (tile.dataset.name || '');
+    }
+
+    tiles.forEach(function (t) {
+      t.addEventListener('click', function () { select(t); });
+    });
+    if (tabs) {
+      tabs.querySelectorAll('.prod-tab').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          tabs.querySelectorAll('.prod-tab').forEach(function (x) { x.classList.remove('active'); });
+          tab.classList.add('active');
+          group = tab.dataset.group;
+          applyFilter();
+        });
+      });
+    }
+    if (search) search.addEventListener('input', applyFilter);
+
+    // Pre-select the first product so the form always has a value.
+    if (tiles.length) select(tiles[0]);
+  })();
+
+  // "Pay with all cashback" shortcut.
+  (function () {
+    var btn = document.getElementById('bc-cashback-max');
+    var input = document.getElementById('bc-cashback');
+    if (btn && input) {
+      btn.addEventListener('click', function () { input.value = input.max; });
+    }
+  })();
+
   document.querySelectorAll('.op-form, dialog form').forEach(function (f) {
-    f.addEventListener('submit', function () {
+    f.addEventListener('submit', function (e) {
+      // Guard the purchase form: a product must be picked.
+      var pid = f.querySelector('input[name="product_id"]');
+      if (pid && !pid.value) {
+        e.preventDefault();
+        alert('{{ t("act.pick_product") }}');
+        return;
+      }
       var btn = f.querySelector('button[type="submit"]');
       if (btn) { btn.disabled = true; btn.textContent = '…'; }
     });

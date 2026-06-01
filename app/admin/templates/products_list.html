@@ -9,11 +9,18 @@
   <h1>{{ t("prod.title") }}</h1>
 </div>
 
+<form method="get" class="search">
+  <span class="search-ico">{{ icon("search", 16) }}</span>
+  <input type="text" name="q" value="{{ q }}" placeholder="{{ t('prod.search_ph') }}">
+  <button class="btn primary" type="submit">{{ t("common.find") }}</button>
+  {% if q %}<a class="btn ghost" href="/admin/products/">{{ t("common.reset") }}</a>{% endif %}
+</form>
+
 <div class="panel">
 {% if not rows %}
   <div class="empty">
     <div class="empty-mark">{{ icon("package", 22) }}</div>
-    <p>{{ t("prod.empty") }}</p>
+    <p>{% if q %}{{ t("cust.no_match") }}{% else %}{{ t("prod.empty") }}{% endif %}</p>
   </div>
 {% else %}
 <table>
@@ -34,9 +41,14 @@
     <td>{% if p.is_active %}<span class="tag green">{{ t("status.active.fem") | lower }}</span>
         {% else %}<span class="tag gray">{{ t("status.inactive") | lower }}</span>{% endif %}</td>
     {% if can_manage %}
-    <td>
+    <td style="white-space:nowrap;">
+      <a class="btn ghost" href="/admin/products/?edit={{ p.id }}#prod-form" title="{{ t('common.edit') }}">{{ icon("pencil", 13) }}</a>
       <form method="post" action="/admin/products/{{ p.id }}/toggle" style="display:inline">
         <button class="btn ghost" type="submit">{% if p.is_active %}{{ t("common.off") }}{% else %}{{ t("common.on") }}{% endif %}</button>
+      </form>
+      <form method="post" action="/admin/products/{{ p.id }}/delete" style="display:inline"
+            onsubmit="return confirm('{{ t('common.delete_confirm') }}')">
+        <button class="btn ghost danger" type="submit" title="{{ t('common.delete') }}">{{ icon("trash", 13) }}</button>
       </form>
     </td>
     {% endif %}
@@ -47,37 +59,46 @@
 {% endif %}
 </div>
 
+{% if rows or page > 1 %}
+<div class="pager">
+  {% if page > 1 %}<a class="btn" href="?q={{ q }}&page={{ page-1 }}">{{ icon("chevron-left", 12) }} {{ t("common.prev") }}</a>{% endif %}
+  <span>{{ t("common.page") }} {{ page }}</span>
+  {% if has_next %}<a class="btn" href="?q={{ q }}&page={{ page+1 }}">{{ t("common.next") }} {{ icon("chevron-right", 12) }}</a>{% endif %}
+</div>
+{% endif %}
+
 {% if can_manage %}
-<div class="panel">
+{% set cats = ['coffee','tea','food','drink','merch'] %}
+{% set sizes = ['','S','M','L','XL'] %}
+<div class="panel" id="prod-form">
+{% if editing %}
+<h2><span class="action-mark accent">{{ icon("pencil", 14) }}</span> {{ t("prod.edit") }}: {{ editing.name }}</h2>
+<form method="post" action="/admin/products/{{ editing.id }}/edit">
+{% else %}
 <h2><span class="action-mark accent">{{ icon("plus", 14) }}</span> {{ t("prod.new") }}</h2>
 <form method="post" action="/admin/products/new">
-  <div class="form-row"><label>{{ t("prod.col.name") }} *</label><input name="name" required placeholder="Cappuccino"></div>
-  <div class="form-row"><label>{{ t("prod.col.sku") }}</label><input name="sku" placeholder="CAPP-M"></div>
+{% endif %}
+  <div class="form-row"><label>{{ t("prod.col.name") }} *</label><input name="name" required placeholder="Cappuccino" value="{{ editing.name if editing else '' }}"></div>
+  <div class="form-row"><label>{{ t("prod.col.sku") }}</label><input name="sku" placeholder="CAPP-M" value="{{ editing.sku if editing and editing.sku else '' }}"></div>
   <div class="form-row"><label>{{ t("prod.col.category") }}</label>
     <select name="category">
-      <option value="coffee">coffee</option>
-      <option value="tea">tea</option>
-      <option value="food">food</option>
-      <option value="merch">merch</option>
+      {% for c in cats %}<option value="{{ c }}" {% if editing and editing.category == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
     </select>
   </div>
   <div class="form-row"><label>{{ t("prod.col.size") }}</label>
     <select name="size">
-      <option value="">—</option>
-      <option value="S">S</option>
-      <option value="M">M</option>
-      <option value="L">L</option>
-      <option value="XL">XL</option>
+      {% for sz in sizes %}<option value="{{ sz }}" {% if editing and (editing.size or '') == sz %}selected{% endif %}>{{ sz or "—" }}</option>{% endfor %}
     </select>
   </div>
-  <div class="form-row"><label>{{ t("prod.col.price") }} *</label><input name="base_price" required placeholder="2.20"></div>
+  <div class="form-row"><label>{{ t("prod.col.price") }} *</label><input name="base_price" required placeholder="2.20" value="{{ editing.base_price if editing else '' }}"></div>
   <div class="form-row">
     <label style="display:flex;align-items:center;gap:.4rem;font-weight:400;">
-      <input type="checkbox" name="is_loyalty_eligible" checked>
+      <input type="checkbox" name="is_loyalty_eligible" {% if (editing and editing.is_loyalty_eligible) or not editing %}checked{% endif %}>
       {{ t("prod.loyalty_hint") }}
     </label>
   </div>
-  <button class="btn primary" type="submit">{{ t("common.create") }}</button>
+  <button class="btn primary" type="submit">{% if editing %}{{ t("common.save") }}{% else %}{{ t("common.create") }}{% endif %}</button>
+  {% if editing %}<a class="btn ghost" href="/admin/products/">{{ t("common.cancel") }}</a>{% endif %}
 </form>
 </div>
 {% endif %}

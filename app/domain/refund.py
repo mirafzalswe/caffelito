@@ -233,14 +233,26 @@ async def _compensate_ledger(
         )
         packages_touched.add(package_id)
     elif account == "wallet:cashback" and entry.unit == "currency":
-        await _refund_cashback(
-            session,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            amount=Decimal(entry.delta),
-            reverse_tx_id=reverse_tx_id,
-            reason=reason,
-        )
+        delta = Decimal(entry.delta)
+        if delta > 0:
+            # The original purchase EARNED cashback — claw it back.
+            await _refund_cashback(
+                session,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                amount=delta,
+                reverse_tx_id=reverse_tx_id,
+                reason=reason,
+            )
+        elif delta < 0:
+            # The original purchase was paid (partly) WITH cashback — give it back.
+            await _restore_cashback(
+                session,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                amount=-delta,
+                reverse_tx_id=reverse_tx_id,
+            )
 
 
 async def _refund_stamps(
@@ -402,4 +414,46 @@ async def _refund_cashback(
             balance=CashbackWallet.balance - cap,
             version=CashbackWallet.version + 1,
         )
+    )
+
+
+async def _restore_cashback(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+    amount: Decimal,
+    reverse_tx_id: uuid.UUID,
+) -> None:
+    """Give back cashback that was SPENT on the reversed purchase.
+
+    The mirror of ``_refund_cashback``: credits the customer's wallet with a
+    ``kind='refund'`` entry so a refunded cashback-paid purchase returns the
+    balance the customer put in.
+    """
+    if amount <= 0:
+        return
+
+    wallet = (
+        await session.execute(
+            select(CashbackWallet)
+            .where(CashbackWallet.user_id == user_id)
+            .order_by(CashbackWallet.currency.asc())
+        )
+    ).scalars().first()
+    if wallet is None:
+        return  # no wallet means nothing was ever spent — defensive
+
+    from app.domain.wallet import credit
+
+    await credit(
+        session,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        currency=wallet.currency,
+        amount=amount,
+        source_type="transaction",
+        source_id=reverse_tx_id,
+        idempotency_key=f"refund_spend:{reverse_tx_id}",
+        kind="refund",
     )

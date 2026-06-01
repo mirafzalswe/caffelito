@@ -175,6 +175,51 @@ async def record_purchase(
         item.transaction_id = tx.id
         session.add(item)
 
+    # ---- 4b. spend cashback as (partial) payment ----------------------------
+    # The customer can put part or all of their accumulated cashback toward the
+    # money portion of the bill. VIP is exclusive (its perk is already a
+    # discount), so cashback payment is ignored while a membership is active.
+    cashback_spent = Decimal("0.00")
+    if (
+        membership is None
+        and request.cashback_to_spend > 0
+        and total_amount > 0
+    ):
+        # Never spend more cashback than the money owed.
+        cashback_spent = min(
+            request.cashback_to_spend.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+            total_amount,
+        )
+        if cashback_spent > 0:
+            from app.domain.wallet import debit  # local import — keep modules decoupled
+
+            # Raises InsufficientCashback (a DomainError) if the balance is short,
+            # rolling the whole purchase back cleanly.
+            await debit(
+                session,
+                tenant_id=request.tenant_id,
+                user_id=request.user_id,
+                currency=request.currency,
+                amount=cashback_spent,
+                source_type="transaction",
+                source_id=tx.id,
+                idempotency_key=f"spend:{tx.id}",
+            )
+            session.add(
+                LedgerEntry(
+                    tenant_id=request.tenant_id,
+                    user_id=request.user_id,
+                    transaction_id=tx.id,
+                    account="wallet:cashback",
+                    delta=-cashback_spent,
+                    unit="currency",
+                    reason="cashback_spend",
+                )
+            )
+            tx.metadata_ = {**(tx.metadata_ or {}), "cashback_spent": str(cashback_spent)}
+
+    result_cash_due = total_amount - cashback_spent
+
     # ---- 5. evaluate campaigns ----------------------------------------------
     active_campaigns = await _load_active_campaigns(
         session,
@@ -188,6 +233,8 @@ async def record_purchase(
         is_replay=False,
         vip_charged=vip_charged,
         vip_balance_remaining=vip_balance_after,
+        cashback_spent=cashback_spent,
+        cash_due=result_cash_due,
     )
 
     # VIP membership is exclusive — while it's active the customer's perk
@@ -245,7 +292,9 @@ async def record_purchase(
             campaign=campaign,
             request=request,
             tx_id=tx.id,
-            money_amount=total_amount,
+            # Earn cashback only on the cash actually paid, so spending cashback
+            # can't recursively earn more cashback.
+            money_amount=result_cash_due,
             result=result,
         )
 
@@ -269,6 +318,7 @@ async def record_purchase(
             "cards_completed": [str(c) for c in result.cards_completed],
             "free_coffees_unlocked": result.free_coffees_unlocked,
             "cashback_earned": str(result.cashback_earned),
+            "cashback_spent": str(result.cashback_spent),
         },
     )
 

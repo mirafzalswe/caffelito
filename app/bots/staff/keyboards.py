@@ -52,6 +52,7 @@ def customer_actions_kb(
     has_free: bool,
     has_prepaid: bool,
     products: list[tuple[uuid.UUID, str, str]],
+    has_membership: bool = False,
 ) -> InlineKeyboardMarkup:
     """Keyboard with one-tap product buttons + special actions.
 
@@ -82,6 +83,13 @@ def customer_actions_kb(
             [InlineKeyboardButton(
                 text="📦 Списать из пакета",
                 callback_data="prepaid",
+            )]
+        )
+    if has_membership:
+        rows.append(
+            [InlineKeyboardButton(
+                text="🚫 Отменить абонемент",
+                callback_data="vip_cancel",
             )]
         )
 

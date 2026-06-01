@@ -93,6 +93,44 @@ async def deduct_balance(
         )
 
 
+async def cancel_membership(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+    membership_id: uuid.UUID | None = None,
+) -> Membership | None:
+    """Cancel a customer's active VIP membership ("remove the campaign").
+
+    Flips status to ``cancelled`` and stamps ``cancelled_at``. Returns the
+    cancelled membership, or ``None`` if the customer had no active one.
+    Remaining deposit balance is NOT auto-refunded — issue a manual cashback
+    grant if the business wants to return it. The caller owns audit + the
+    dashboard projection refresh.
+    """
+    stmt = (
+        select(Membership)
+        .where(
+            Membership.tenant_id == tenant_id,
+            Membership.user_id == user_id,
+            Membership.status == "active",
+        )
+        .with_for_update()
+    )
+    if membership_id is not None:
+        stmt = stmt.where(Membership.id == membership_id)
+    m = (await session.execute(stmt)).scalar_one_or_none()
+    if m is None:
+        return None
+
+    await session.execute(
+        update(Membership)
+        .where(Membership.id == m.id, Membership.status == "active")
+        .values(status="cancelled", cancelled_at=now())
+    )
+    return m
+
+
 async def activate_membership(
     session: AsyncSession,
     *,

@@ -33,10 +33,11 @@ async def login_form(request: Request, error: str | None = None) -> HTMLResponse
 async def login_submit(
     request: Request,
     db: SessionDep,
-    email: str = Form(...),
+    username: str = Form(...),
     password: str = Form(...),
 ):
-    stmt = select(Staff).where(Staff.email == email.lower(), Staff.status == "active")
+    username = username.strip()
+    stmt = select(Staff).where(Staff.username == username, Staff.status == "active")
     staff = (await db.execute(stmt)).scalar_one_or_none()
 
     invalid = (
@@ -51,8 +52,8 @@ async def login_submit(
             "login.html",
             {
                 "app_version": __version__,
-                "error": "Неверный email или пароль.",
-                "email": email,
+                "error": "Неверный логин или пароль.",
+                "username": username,
             },
             status_code=401,
         )

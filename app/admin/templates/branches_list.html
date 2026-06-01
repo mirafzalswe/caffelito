@@ -17,7 +17,7 @@
   </div>
 {% else %}
 <table>
-  <thead><tr><th>{{ t("br.col.name") }}</th><th>{{ t("br.col.address") }}</th><th>{{ t("br.col.tz") }}</th><th>{{ t("br.col.status") }}</th></tr></thead>
+  <thead><tr><th>{{ t("br.col.name") }}</th><th>{{ t("br.col.address") }}</th><th>{{ t("br.col.tz") }}</th><th>{{ t("br.col.status") }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead>
   <tbody>
   {% for b in rows %}
   <tr>
@@ -26,6 +26,18 @@
     <td class="muted">{{ b.timezone }}</td>
     <td>{% if b.status=='active' %}<span class="tag green">{{ t("status.active.fem") | lower }}</span>
         {% else %}<span class="tag gray">{{ b.status }}</span>{% endif %}</td>
+    {% if can_manage %}
+    <td style="white-space:nowrap;">
+      <a class="btn ghost" href="/admin/branches/?edit={{ b.id }}#br-form" title="{{ t('common.edit') }}">{{ icon("pencil", 13) }}</a>
+      <form method="post" action="/admin/branches/{{ b.id }}/toggle" style="display:inline">
+        <button class="btn ghost" type="submit">{% if b.status=='active' %}{{ t("common.off") }}{% else %}{{ t("common.on") }}{% endif %}</button>
+      </form>
+      <form method="post" action="/admin/branches/{{ b.id }}/delete" style="display:inline"
+            onsubmit="return confirm('{{ t('common.delete_confirm') }}')">
+        <button class="btn ghost danger" type="submit" title="{{ t('common.delete') }}">{{ icon("trash", 13) }}</button>
+      </form>
+    </td>
+    {% endif %}
   </tr>
   {% endfor %}
   </tbody>
@@ -34,13 +46,19 @@
 </div>
 
 {% if can_manage %}
-<div class="panel">
+<div class="panel" id="br-form">
+{% if editing %}
+<h2><span class="action-mark accent">{{ icon("pencil", 14) }}</span> {{ t("br.edit") }}: {{ editing.name }}</h2>
+<form method="post" action="/admin/branches/{{ editing.id }}/edit">
+{% else %}
 <h2><span class="action-mark accent">{{ icon("plus", 14) }}</span> {{ t("br.new") }}</h2>
 <form method="post" action="/admin/branches/new">
-  <div class="form-row"><label>{{ t("br.col.name") }}</label><input name="name" required></div>
-  <div class="form-row"><label>{{ t("br.col.address") }}</label><input name="address"></div>
-  <div class="form-row"><label>{{ t("br.col.tz") }} (IANA)</label><input name="timezone" value="Asia/Tashkent"></div>
-  <button class="btn primary" type="submit">{{ t("common.create") }}</button>
+{% endif %}
+  <div class="form-row"><label>{{ t("br.col.name") }}</label><input name="name" required value="{{ editing.name if editing else '' }}"></div>
+  <div class="form-row"><label>{{ t("br.col.address") }}</label><input name="address" value="{{ editing.address if editing and editing.address else '' }}"></div>
+  <div class="form-row"><label>{{ t("br.col.tz") }} (IANA)</label><input name="timezone" value="{{ editing.timezone if editing else 'Asia/Tashkent' }}"></div>
+  <button class="btn primary" type="submit">{% if editing %}{{ t("common.save") }}{% else %}{{ t("common.create") }}{% endif %}</button>
+  {% if editing %}<a class="btn ghost" href="/admin/branches/">{{ t("common.cancel") }}</a>{% endif %}
 </form>
 </div>
 {% endif %}
